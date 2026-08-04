@@ -1,0 +1,17 @@
+node_modules/
+.appium/
+dist/
+# Seluruh isi reports/ TIDAK di-commit - termasuk laporan HTML & PDF. Isinya screenshot layar
+# device asli (form checkout, status bar, notifikasi) yang berisiko membocorkan data pribadi, dan
+# PDF-nya puluhan MB. Distribusikan lewat artifact CI atau share manual, bukan lewat repo.
+reports/
+.env
+*.log
+apps/*.apk
+apps/*.ipa
+.idea/
+.vscode/
+.claude/
+CLAUDE.md
+Testcript/
+.DS_Store

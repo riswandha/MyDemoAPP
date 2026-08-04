@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "lib": ["ES2022"],
+    "types": ["node", "@wdio/globals/types", "@wdio/mocha-framework", "expect-webdriverio"],
+    "outDir": "./dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@pages/*": ["./pages/*"],
+      "@locators/*": ["./locators/*"],
+      "@utils/*": ["./utils/*"],
+      "@fixtures/*": ["./fixtures/*"],
+      "@config/*": ["./config/*"]
+    }
+  },
+  "include": [
+    "config/**/*.ts",
+    "tests/**/*.ts",
+    "pages/**/*.ts",
+    "locators/**/*.ts",
+    "utils/**/*.ts",
+    "fixtures/**/*.ts",
+    "scripts/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "reports"]
+}
