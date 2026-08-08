@@ -138,7 +138,11 @@ jobs:
     name: Test (API ${{ matrix.api-level }})
     needs: [typecheck, prepare]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Pembatas kerugian bila emulator menggantung saat dimatikan (lihat catatan di langkah "Run tests
+    # on emulator"). Job normal selesai 10-20 menit termasuk retry, jadi 40 memberi ruang lega tapi
+    # memotong pemborosan sepertiga dibanding 60 - yang sudah pernah terjadi: run 31253853848 job
+    # API 36 membakar 60 menit padahal seluruh test-nya SUDAH LULUS pada menit ke-22.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
@@ -220,9 +224,19 @@ jobs:
           # elemen app jadi tak terlihat oleh UiAutomator2 walau app-nya merender normal di
           # belakangnya. Dimatikan di level device, bukan dikompensasi dengan retry: dialognya tidak
           # pernah hilang sendiri, jadi retry hanya mengulang kegagalan yang sama.
+          #
+          # Baris kedua: setelah wdio selesai, emulator DIPAKSA mati. Sebabnya, `adb emu kill` yang
+          # dijalankan action ini sendiri pernah dijawab "OK: killing emulator, bye bye" padahal
+          # proses qemu-nya tidak pernah benar-benar berakhir; action lalu menunggunya tanpa batas.
+          # Di run 31253853848 job API 36 itu menyandera runner 38 menit setelah SELURUH test lulus,
+          # sampai dihentikan paksa oleh timeout - 60 menit kuota terbakar untuk run yang sebenarnya
+          # hijau. `pkill -9` memastikan prosesnya benar-benar mati sehingga tidak ada yang ditunggu.
+          #
+          # Exit code wdio disimpan dulu dan dikembalikan di akhir, supaya pembersihan ini TIDAK
+          # menyembunyikan kegagalan test (tanpa itu, exit code yang terbaca adalah milik pkill).
           script: |
             adb shell settings put global hide_error_dialogs 1 && adb shell settings get global hide_error_dialogs
-            npx wdio run ./config/wdio.android.conf.ts ${{ needs.prepare.outputs.suite-args }}
+            npx wdio run ./config/wdio.android.conf.ts ${{ needs.prepare.outputs.suite-args }}; code=$?; adb -s emulator-5554 emu kill >/dev/null 2>&1 || true; pkill -9 -f qemu-system-x86_64 >/dev/null 2>&1 || true; exit $code
 
       - name: Tulis ringkasan ke job summary
         if: always()
@@ -253,7 +267,10 @@ jobs:
     needs: typecheck
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.collection_report)
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Job ini terukur ~13 menit; 120 hanyalah angka jaga-jaga yang terlalu longgar dan justru
+    # membiarkan emulator menggantung menyandera runner sangat lama (lihat catatan di job `test`).
+    # 45 tetap memberi ruang lebih dari 3x durasi normal.
+    timeout-minutes: 45
     env:
       PLATFORM_VERSION: '13'
     steps:
@@ -320,7 +337,7 @@ jobs:
             adb shell settings put global hide_error_dialogs 1 && adb shell settings get global hide_error_dialogs
             adb install -r "$APP_PATH"
             npm run report:capture
-            npm run report:build
+            npm run report:build; code=$?; adb -s emulator-5554 emu kill >/dev/null 2>&1 || true; pkill -9 -f qemu-system-x86_64 >/dev/null 2>&1 || true; exit $code
 
       - name: Upload collection report
         if: always()
