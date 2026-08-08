@@ -15,6 +15,7 @@
     "test:smoke": "wdio run ./config/wdio.android.conf.ts --suite smoke",
     "typecheck": "tsc --noEmit",
     "appium": "appium",
+    "ci:summary": "ts-node scripts/ci-step-summary.ts",
     "report:capture": "ts-node scripts/run-multidevice-reports.ts",
     "report:build": "ts-node scripts/build-collection-report.ts",
     "report:generate": "allure generate reports/allure-results --clean -o reports/allure-report",
