@@ -161,7 +161,9 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            set -euo pipefail
+            # android-emulator-runner menjalankan blok ini dengan /usr/bin/sh (dash), bukan bash -
+            # dash tidak mengenal `set -o pipefail`, jadi cukup `set -eu`.
+            set -eu
             adb wait-for-device
             if [ -n "$SUITE" ]; then
               npx wdio run ./config/wdio.android.conf.ts --suite "$SUITE"
@@ -245,7 +247,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            set -euo pipefail
+            # Dijalankan dengan /usr/bin/sh (dash) - lihat catatan di job `test`.
+            set -eu
             adb wait-for-device
             # run-multidevice-reports.ts membuka app lewat appPackage/appActivity dan tidak meng-install
             # sendiri, jadi APK dipasang lebih dulu di sini.
