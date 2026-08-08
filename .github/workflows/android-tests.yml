@@ -25,7 +25,7 @@ on:
         required: false
         default: '33'
         type: choice
-        options: ['33', '30', '34']
+        options: ['33', '30', '34', '36']
       collection_report:
         description: 'Jalankan juga collection report (HTML + PDF). Lama.'
         required: false
@@ -83,11 +83,14 @@ jobs:
           # platform-version WAJIB cocok dengan api-level: utils/env.ts selalu mengirim
           # appium:platformVersion (default '13') saat single device, dan versi yang tidak cocok
           # membuat pembuatan sesi UiAutomator2 gagal.
+          # api-level = nomor platform Android dari Google (30=Android 11, 33=Android 13,
+          # 34=Android 14, 36=Android 16). platform-version = string versi rilis yang dikirim Appium.
           api30='{"include":[{"api-level":30,"platform-version":"11"}]}'
           api33='{"include":[{"api-level":33,"platform-version":"13"}]}'
           api34='{"include":[{"api-level":34,"platform-version":"14"}]}'
+          api36='{"include":[{"api-level":36,"platform-version":"16"}]}'
           single="$api33"
-          full='{"include":[{"api-level":30,"platform-version":"11"},{"api-level":33,"platform-version":"13"},{"api-level":34,"platform-version":"14"}]}'
+          full='{"include":[{"api-level":30,"platform-version":"11"},{"api-level":33,"platform-version":"13"},{"api-level":34,"platform-version":"14"},{"api-level":36,"platform-version":"16"}]}'
 
           case "${{ github.event_name }}" in
             pull_request)
@@ -105,6 +108,7 @@ jobs:
               case "${{ inputs.api_level }}" in
                 30) matrix="$api30" ;;
                 34) matrix="$api34" ;;
+                36) matrix="$api36" ;;
                 *)  matrix="$api33" ;;
               esac
               ;;
