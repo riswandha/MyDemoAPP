@@ -61,6 +61,18 @@ export default class BasePage {
 
   // ===== Gesture primitives (dipakai bersama beberapa page object) =====
 
+  // Kecepatan scroll (piksel/detik) yang dikirim ke UiAutomator2. Default bawaan `mobile:
+  // scrollGesture` adalah 5000 - cukup cepat untuk memicu FLING pada RecyclerView, yaitu inersia
+  // yang membuat daftar terus meluncur setelah jari "diangkat". Akibatnya jarak yang benar-benar
+  // ter-scroll BISA JAUH LEBIH BESAR dari `percent` yang diminta, dan satu baris konten terlewat
+  // tanpa error apa pun.
+  //
+  // Itu penyebab kegagalan CI di job API 34 run 31253853848: catalog.spec.ts gagal dengan
+  // `indexOf(produk) === -1` - produknya ada di katalog, tapi tidak pernah kebagian terbaca karena
+  // scroll melompatinya. Nilai 2000 cukup pelan untuk jadi drag terkontrol tanpa inersia, dan masih
+  // jauh lebih cepat daripada menunggu animasi fling selesai.
+  private static readonly SCROLL_SPEED = 2000;
+
   // Scroll satu gesture pada area tengah layar; mengembalikan true bila masih bisa scroll lagi.
   // Parameter viewport bisa di-override untuk kasus khusus (mis. area scroll berbeda per halaman).
   protected async scrollGesture(
@@ -78,6 +90,7 @@ export default class BasePage {
       height: Math.floor(height * heightRatio),
       direction,
       percent,
+      speed: BasePage.SCROLL_SPEED,
     })) as unknown as boolean;
   }
 
