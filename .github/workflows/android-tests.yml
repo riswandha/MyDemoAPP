@@ -208,7 +208,16 @@ jobs:
           # Satu baris, satu perintah: action ini menjalankan tiap baris sebagai `sh -c` terpisah,
           # jadi if/then/fi maupun `set -eu` yang berdiri sendiri tidak berfungsi di sini.
           # Pemilihan suite sudah diselesaikan di job `prepare`.
-          script: npx wdio run ./config/wdio.android.conf.ts ${{ needs.prepare.outputs.suite-args }}
+          #
+          # Baris pertama mematikan dialog error/ANR sistem (Settings.Global.HIDE_ERROR_DIALOGS).
+          # Tanpa ini, ANR pada proses LAIN - mis. "Pixel Launcher isn't responding" di run
+          # 31244157054 job API 34 - memunculkan dialog yang memegang window aktif, dan SELURUH
+          # elemen app jadi tak terlihat oleh UiAutomator2 walau app-nya merender normal di
+          # belakangnya. Dimatikan di level device, bukan dikompensasi dengan retry: dialognya tidak
+          # pernah hilang sendiri, jadi retry hanya mengulang kegagalan yang sama.
+          script: |
+            adb shell settings put global hide_error_dialogs 1 && adb shell settings get global hide_error_dialogs
+            npx wdio run ./config/wdio.android.conf.ts ${{ needs.prepare.outputs.suite-args }}
 
       - name: Tulis ringkasan ke job summary
         if: always()
@@ -299,9 +308,11 @@ jobs:
           # boleh berisi perintah satu baris - tanpa komentar, tanpa if/then/fi. Baris berikutnya
           # tidak dijalankan bila baris sebelumnya gagal.
           #
-          # Baris pertama memasang APK: run-multidevice-reports.ts membuka app lewat
+          # Baris pertama mematikan dialog error/ANR sistem - lihat alasan lengkapnya di job `test`.
+          # Baris kedua memasang APK: run-multidevice-reports.ts membuka app lewat
           # appPackage/appActivity dan tidak meng-install sendiri.
           script: |
+            adb shell settings put global hide_error_dialogs 1 && adb shell settings get global hide_error_dialogs
             adb install -r "$APP_PATH"
             npm run report:capture
             npm run report:build

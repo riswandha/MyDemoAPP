@@ -1,4 +1,5 @@
 import { restartAppToInitialState } from '../utils/device-helper';
+import SystemDialogPage from '../pages/system-dialog.page';
 import { env } from '../utils/env';
 
 // Fixture/helper hook WebdriverIO yang dipakai config di lifecycle test, dipisah dari file config
@@ -7,7 +8,16 @@ import { env } from '../utils/env';
 
 // Dijalankan di hook `before` tiap sesi: pastikan app mulai dari layar awal (Catalog). Lihat alasan
 // terminate->activate di restartAppToInitialState().
+//
+// Sebelum itu, tutup dulu dialog ANR sistem bila ada. Dialog ANR milik proses LAIN (mis. launcher)
+// tetap menempel di atas app yang dites dan memegang window aktif, sehingga seluruh elemen app tidak
+// terlihat oleh UiAutomator2 - persis yang menjatuhkan 5 dari 6 spec file di job API 34 pada run CI
+// 31244157054. Dicek per sesi (tiap spec file punya sesi sendiri) karena dialog itu bisa muncul
+// kapan saja di tengah job, bukan hanya di awal.
 export async function resetAppBeforeSession(): Promise<void> {
+  if (await SystemDialogPage.dismissAnrDialog()) {
+    console.log('Dialog ANR sistem terdeteksi dan ditutup sebelum sesi dimulai.');
+  }
   await restartAppToInitialState(env.appPackage);
 }
 
