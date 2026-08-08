@@ -6,6 +6,14 @@ export type { SortOption };
 
 // CatalogPage = Page Object untuk layar Product Catalog (halaman utama setelah app terbuka).
 class CatalogPage extends BasePage {
+  // Langkah scroll saat menyusuri katalog: setengah viewport, bukan 0.8 seperti sebelumnya. Semakin
+  // pendek langkahnya, semakin besar jaminan dua pembacaan berurutan masih bersinggungan.
+  private static readonly COLLECT_SCROLL_PERCENT = 0.5;
+  // Batas aman jumlah pembacaan layar. Katalog berisi ~22 kartu (termasuk varian warna); dengan
+  // langkah setengah viewport butuh belasan pass, dan 40 memberi ruang untuk koreksi mundur tanpa
+  // pernah jadi loop tak berujung.
+  private static readonly MAX_COLLECT_PASSES = 40;
+
   // Buka halaman detail produk dengan tap pada gambar produk di katalog. Scroll cari produknya dulu
   // (mulai dari paling atas) karena posisi produk di grid bisa berubah-ubah tergantung urutan sort
   // yang aktif (mis. kalau case Sort dijalankan sebelum case ini dalam satu Test Case Collection).
@@ -70,10 +78,31 @@ class CatalogPage extends BasePage {
     }
   }
 
+  // Baca nama & harga produk yang SEDANG terlihat di layar, apa adanya tanpa dedup.
+  private async readVisibleProducts(): Promise<{ titles: string[]; prices: string[] }> {
+    const titleEls = await this.findAll(CatalogLocators.titleTexts);
+    const priceEls = await this.findAll(CatalogLocators.priceTexts);
+    const count = Math.min(titleEls.length as unknown as number, priceEls.length as unknown as number);
+
+    const titles: string[] = [];
+    const prices: string[] = [];
+    for (let i = 0; i < count; i++) {
+      titles.push(await titleEls[i].getText());
+      prices.push(await priceEls[i].getText());
+    }
+    return { titles, prices };
+  }
+
   // Kumpulkan nama & harga semua produk di catalog, urut sesuai tampilan di layar (scroll dari atas
   // sampai bawah). Dedup berdasarkan nama produk supaya overlap antar scroll tidak menghasilkan data
   // duplikat. Dipakai untuk verifikasi hasil sort tanpa hardcode daftar produk di test data, sehingga
   // test tetap valid walau isi katalog berubah.
+  //
+  // Kebenaran hasilnya bergantung pada satu syarat: dua pembacaan layar yang berurutan HARUS
+  // bersinggungan. Kalau tidak, ada baris yang tidak pernah terbaca dan hasilnya bolong secara diam-
+  // diam - persis kegagalan `indexOf(produk) === -1` di CI job API 34 (run 31253853848). Syarat itu
+  // dijaga dua lapis: langkah scroll dikecilkan jadi setengah viewport, dan tiap pass diperiksa
+  // apakah benar bersinggungan dengan pass sebelumnya.
   async getAllProducts(): Promise<{ titles: string[]; prices: string[] }> {
     await this.scrollToTop();
 
@@ -81,23 +110,34 @@ class CatalogPage extends BasePage {
     const titles: string[] = [];
     const prices: string[] = [];
 
-    let canScrollMore = true;
-    let safetyCounter = 0;
-    while (canScrollMore && safetyCounter < 20) {
-      const titleEls = await this.findAll(CatalogLocators.titleTexts);
-      const priceEls = await this.findAll(CatalogLocators.priceTexts);
-      const count = Math.min(titleEls.length as unknown as number, priceEls.length as unknown as number);
-      for (let i = 0; i < count; i++) {
-        const title = await titleEls[i].getText();
+    let previousVisible: string[] = [];
+    let passes = 0;
+    while (passes < CatalogPage.MAX_COLLECT_PASSES) {
+      passes++;
+      const visible = await this.readVisibleProducts();
+
+      // Penjaga anti-lompat: kalau tidak ada satu pun judul yang sama dengan pembacaan sebelumnya,
+      // berarti gesture terakhir melewati minimal satu baris. Mundur setengah langkah lalu baca
+      // ulang - JANGAN lanjut turun, karena produk yang terlewat tidak akan pernah kembali terlihat.
+      const overlaps = previousVisible.length === 0 || visible.titles.some((t) => previousVisible.includes(t));
+      if (!overlaps) {
+        await this.scrollGesture('up', CatalogPage.COLLECT_SCROLL_PERCENT);
+        continue;
+      }
+
+      for (let i = 0; i < visible.titles.length; i++) {
+        const title = visible.titles[i];
         if (!seenTitles.has(title)) {
           seenTitles.add(title);
           titles.push(title);
-          prices.push(await priceEls[i].getText());
+          prices.push(visible.prices[i]);
         }
       }
+      previousVisible = visible.titles;
 
-      canScrollMore = await this.scrollGesture('down', 0.8);
-      safetyCounter++;
+      if (!(await this.scrollGesture('down', CatalogPage.COLLECT_SCROLL_PERCENT))) {
+        break;
+      }
     }
 
     return { titles, prices };
