@@ -1,5 +1,6 @@
 import { createRuntime, writeReportData } from '../lib/report-client';
 import LoginPage from '../../pages/login.page';
+import { LoginLocators } from '../../locators/login.locators';
 import { validUser, lockedOutUser } from '../../utils/test-data';
 
 // Menjalankan & merekam seluruh Test Case dari tests/login/login.spec.ts (Fitur Login, TS001) memakai
@@ -9,14 +10,10 @@ async function main() {
   const rt = await createRuntime('login');
   const { client } = rt;
 
-  // Selector di sini SENGAJA disamakan persis dengan yang dipakai di LoginPage (bukan tebakan),
-  // dipakai hanya untuk mengisi field satu-satu supaya laporan punya bukti visual per langkah -
-  // aksinya sendiri (openLoginScreen, login, logout, isLoggedIn) tetap 100% memanggil LoginPage asli.
-  const usernameInput =
-    'android=new UiSelector().resourceId("com.saucelabs.mydemoapp.android:id/nameET")';
-  const passwordInput =
-    'android=new UiSelector().resourceId("com.saucelabs.mydemoapp.android:id/passwordET")';
-  const loginButton = 'android=new UiSelector().resourceId("com.saucelabs.mydemoapp.android:id/loginBtn")';
+  // Field login diisi satu per satu (bukan lewat LoginPage.login()) supaya laporan punya bukti visual
+  // per langkah. Selector-nya diambil dari LoginLocators - sumber yang sama persis dengan yang dipakai
+  // LoginPage, jadi laporan ikut berubah otomatis saat locator app berubah. Aksi selebihnya
+  // (openLoginScreen, login, logout, isLoggedIn) tetap 100% memanggil LoginPage asli.
 
   // TS001/TC001 - Login dengan akun valid
   {
@@ -27,11 +24,11 @@ async function main() {
     await LoginPage.openLoginScreen();
     await rt.captureStep(caseId, 'Buka menu, lalu pilih "Log In"');
 
-    await client.$(usernameInput).setValue(validUser.username);
-    await client.$(passwordInput).setValue(validUser.password);
+    await rt.element(LoginLocators.usernameInput).setValue(validUser.username);
+    await rt.element(LoginLocators.passwordInput).setValue(validUser.password);
     await rt.captureStep(caseId, `Isi username (${validUser.username}) & password`);
 
-    await client.$(loginButton).click();
+    await rt.element(LoginLocators.loginButton).click();
     await client.pause(4000);
     await rt.captureStep(caseId, 'Klik tombol Login -> berhasil, kembali ke halaman Catalog');
 
@@ -48,11 +45,11 @@ async function main() {
     await LoginPage.openLoginScreen();
     await rt.captureStep(caseId, 'Buka menu, lalu pilih "Log In" (sesi sebelumnya di-logout otomatis)');
 
-    await client.$(usernameInput).setValue(lockedOutUser.username);
-    await client.$(passwordInput).setValue(lockedOutUser.password);
+    await rt.element(LoginLocators.usernameInput).setValue(lockedOutUser.username);
+    await rt.element(LoginLocators.passwordInput).setValue(lockedOutUser.password);
     await rt.captureStep(caseId, `Isi username (${lockedOutUser.username}) & password akun locked out`);
 
-    await client.$(loginButton).click();
+    await rt.element(LoginLocators.loginButton).click();
     await rt.captureStep(caseId, 'Klik tombol Login -> tampil pesan error locked out');
 
     const passwordError = await LoginPage.getPasswordError();
@@ -67,11 +64,11 @@ async function main() {
     rt.startCase(caseId, 'TS001/TC003', 'Validasi field username kosong');
 
     await LoginPage.openLoginScreen();
-    await client.$(usernameInput).setValue('');
-    await client.$(passwordInput).setValue(validUser.password);
+    await rt.element(LoginLocators.usernameInput).setValue('');
+    await rt.element(LoginLocators.passwordInput).setValue(validUser.password);
     await rt.captureStep(caseId, 'Buka layar Login, kosongkan username, isi password, lalu submit');
 
-    await client.$(loginButton).click();
+    await rt.element(LoginLocators.loginButton).click();
     await rt.captureStep(caseId, 'Klik tombol Login -> tampil pesan error validasi username');
 
     const usernameError = await LoginPage.getUsernameError();
@@ -84,11 +81,11 @@ async function main() {
     rt.startCase(caseId, 'TS001/TC004', 'Validasi field password kosong');
 
     await LoginPage.openLoginScreen();
-    await client.$(usernameInput).setValue(validUser.username);
-    await client.$(passwordInput).setValue('');
+    await rt.element(LoginLocators.usernameInput).setValue(validUser.username);
+    await rt.element(LoginLocators.passwordInput).setValue('');
     await rt.captureStep(caseId, 'Buka layar Login, isi username, kosongkan password, lalu submit');
 
-    await client.$(loginButton).click();
+    await rt.element(LoginLocators.loginButton).click();
     await rt.captureStep(caseId, 'Klik tombol Login -> tampil pesan error validasi password');
 
     const passwordError = await LoginPage.getPasswordError();

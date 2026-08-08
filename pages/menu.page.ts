@@ -100,11 +100,21 @@ class MenuPage extends BasePage {
     await this.click(MenuLocators.aboutWebsiteLink);
   }
 
-  // Cek apakah browser eksternal berhasil terbuka (current package bukan lagi app "My Demo App")
-  async isExternalBrowserOpened(): Promise<boolean> {
-    await driver.pause(1500);
-    const currentPackage = await getCurrentPackage();
-    return currentPackage !== APP_PACKAGE_DEFAULT;
+  // Cek apakah browser eksternal berhasil terbuka (current package bukan lagi app "My Demo App").
+  // Menunggu berbasis kondisi - polling package aktif sampai berubah - bukan delay tetap: cold start
+  // browser bisa jauh lebih lama dari 1,5 detik di device lambat, dan hampir instan di device cepat.
+  // Timeout habis = browser memang tidak terbuka, jadi dikembalikan false (bukan error), karena
+  // status ini yang justru diassert di spec.
+  async isExternalBrowserOpened(timeout = 15000): Promise<boolean> {
+    try {
+      await driver.waitUntil(async () => (await getCurrentPackage()) !== APP_PACKAGE_DEFAULT, {
+        timeout,
+        interval: 300,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

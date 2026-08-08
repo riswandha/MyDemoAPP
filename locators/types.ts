@@ -21,3 +21,23 @@ export const TODO_IOS = 'TODO(ios): locator belum diinspeksi di device iOS';
 export function androidOnly(android: string): PlatformSelector {
   return { android, ios: TODO_IOS };
 }
+
+// SATU-SATUNYA tempat percabangan platform di seluruh project (aturan CLAUDE.md: jangan tulis
+// if/else platform berulang di banyak file). Dipakai oleh BasePage.platformLocator() untuk test biasa
+// DAN oleh scripts/lib/report-client.ts untuk script laporan yang jalan di luar runner WebdriverIO -
+// keduanya memakai resolusi yang sama persis, jadi tidak ada dua versi aturan platform yang bisa
+// menyimpang.
+//
+// Default ke Android (project ini Android-first). Bila run di iOS tapi locator iOS belum diinspeksi
+// di device nyata, lempar error jelas alih-alih gagal senyap dengan selector tak valid.
+export function resolvePlatformSelector(selector: PlatformSelector, isIOS: boolean): string {
+  if (!isIOS) {
+    return selector.android;
+  }
+  if (selector.ios.startsWith('TODO(ios)')) {
+    throw new Error(
+      `Locator iOS belum tersedia (${selector.ios}). Inspeksi elemen di device iOS lalu lengkapi slot ios di file locators/.`,
+    );
+  }
+  return selector.ios;
+}

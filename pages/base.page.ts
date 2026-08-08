@@ -1,4 +1,4 @@
-import type { PlatformSelector } from '../locators/types';
+import { resolvePlatformSelector, type PlatformSelector } from '../locators/types';
 
 // BasePage berisi fungsi-fungsi umum (reusable) yang dipakai di semua page object, supaya tiap page
 // object turunan tidak perlu menulis ulang logic interaksi elemen yang sama.
@@ -6,19 +6,10 @@ import type { PlatformSelector } from '../locators/types';
 // Semua helper interaksi menerima PlatformSelector ({ android, ios }) dan memilih selector yang tepat
 // lewat platformLocator() - inilah SATU-SATUNYA tempat percabangan platform, sesuai aturan CLAUDE.md.
 export default class BasePage {
-  // Pilih selector sesuai platform aktif. Default ke Android (project ini Android-first). Bila run di
-  // iOS tapi locator iOS belum diinspeksi (masih penanda TODO), lempar error jelas alih-alih gagal
-  // senyap dengan selector tak valid.
+  // Pilih selector sesuai platform aktif. Aturan resolusinya sendiri ada di locators/types.ts supaya
+  // dipakai bersama dengan script laporan (scripts/lib/report-client.ts) yang jalan di luar runner.
   protected platformLocator(selector: PlatformSelector): string {
-    if (driver.isIOS) {
-      if (selector.ios.startsWith('TODO(ios)')) {
-        throw new Error(
-          `Locator iOS belum tersedia (${selector.ios}). Inspeksi elemen di device iOS lalu lengkapi slot ios di file locators/.`,
-        );
-      }
-      return selector.ios;
-    }
-    return selector.android;
+    return resolvePlatformSelector(selector, driver.isIOS);
   }
 
   // Menunggu sampai elemen tampil di layar (dipakai untuk validasi/sinkronisasi)
