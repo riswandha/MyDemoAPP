@@ -1,0 +1,266 @@
+name: Android Tests
+
+# Strategi eksekusi (sesuai aturan CLAUDE.md: device farm mahal & lambat, jangan full regression tiap commit):
+#   - Pull request       -> typecheck + suite `smoke` di satu API level
+#   - Push ke main       -> seluruh spec di beberapa API level (matrix)
+#   - Nightly / manual   -> collection report (HTML + PDF per fitur) sebagai artifact
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # 18:00 UTC = 01:00 WIB. Nightly untuk collection report yang panjang.
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Suite yang dijalankan ("all" = seluruh spec)'
+        required: false
+        default: 'smoke'
+        type: choice
+        options: ['smoke', 'all', 'login', 'catalog', 'cart', 'checkout', 'menu']
+      collection_report:
+        description: 'Jalankan juga collection report (HTML + PDF). Lama.'
+        required: false
+        default: false
+        type: boolean
+
+# Push beruntun ke branch yang sama membatalkan run lama - hemat waktu runner & antrean emulator.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_PACKAGE: com.saucelabs.mydemoapp.android
+  APP_ACTIVITY: com.saucelabs.mydemoapp.android.view.activities.SplashActivity
+  # Serial emulator bawaan android-emulator-runner. Satu device -> config Android otomatis sequential.
+  ANDROID_DEVICES: emulator-5554
+
+jobs:
+  # Job cepat tanpa emulator: nilai per-menit paling tinggi, memberi feedback dalam hitungan detik.
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+  # Menentukan suite & matrix API level berdasarkan event pemicu, supaya job test di bawah tetap
+  # satu definisi (tidak perlu menduplikasi job untuk PR vs push).
+  prepare:
+    name: Prepare matrix
+    runs-on: ubuntu-latest
+    outputs:
+      suite: ${{ steps.plan.outputs.suite }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # platform-version WAJIB cocok dengan api-level: utils/env.ts selalu mengirim
+          # appium:platformVersion (default '13') saat single device, dan versi yang tidak cocok
+          # membuat pembuatan sesi UiAutomator2 gagal.
+          single='{"include":[{"api-level":33,"platform-version":"13"}]}'
+          full='{"include":[{"api-level":30,"platform-version":"11"},{"api-level":33,"platform-version":"13"},{"api-level":34,"platform-version":"14"}]}'
+
+          case "${{ github.event_name }}" in
+            pull_request)
+              echo "suite=smoke"        >> "$GITHUB_OUTPUT"
+              echo "matrix=$single"     >> "$GITHUB_OUTPUT"
+              ;;
+            push)
+              echo "suite="             >> "$GITHUB_OUTPUT"
+              echo "matrix=$full"       >> "$GITHUB_OUTPUT"
+              ;;
+            workflow_dispatch)
+              # "all" adalah sentinel untuk "tanpa --suite" - choice input tidak menerima opsi string kosong.
+              suite="${{ inputs.suite }}"
+              if [ "$suite" = "all" ]; then suite=""; fi
+              echo "suite=$suite"       >> "$GITHUB_OUTPUT"
+              echo "matrix=$single"     >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              # schedule: collection report yang mengambil alih, test biasa cukup satu API level.
+              echo "suite="             >> "$GITHUB_OUTPUT"
+              echo "matrix=$single"     >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+  test:
+    name: Test (API ${{ matrix.api-level }})
+    needs: [typecheck, prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Dibutuhkan oleh emulator Android dan oleh allure-commandline saat generate report.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: npm ci
+
+      # Runner CI selalu bersih: app belum terpasang, jadi APP_PATH WAJIB diisi agar Appium
+      # meng-install APK (berbeda dari run lokal yang boleh mengosongkan APP_PATH).
+      - name: Download APK My Demo App
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p apps
+          gh release download --repo saucelabs/my-demo-app-android \
+            --pattern 'mda-*.apk' --dir apps --clobber
+          # Release berisi 2 asset; yang -androidTest- adalah test runner Espresso, bukan aplikasinya.
+          rm -f apps/mda-androidTest-*.apk
+          APK="$(ls apps/mda-*.apk | head -1)"
+          echo "APP_PATH=$APK" >> "$GITHUB_ENV"
+          echo "APK yang dipakai: $APK"
+
+      # Tanpa ini emulator jatuh ke emulasi software yang terlalu lambat untuk flow checkout.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SUITE: ${{ needs.prepare.outputs.suite }}
+          PLATFORM_VERSION: ${{ matrix.platform-version }}
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 4096M
+          # Animasi native adalah sumber flaky klasik di emulator CI; dimatikan di level device,
+          # bukan dikompensasi dengan menaikkan timeout.
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            if [ -n "$SUITE" ]; then
+              npx wdio run ./config/wdio.android.conf.ts --suite "$SUITE"
+            else
+              npm run test:android
+            fi
+
+      - name: Tulis ringkasan ke job summary
+        if: always()
+        env:
+          SUMMARY_LABEL: API ${{ matrix.api-level }}${{ needs.prepare.outputs.suite && format(' / suite {0}', needs.prepare.outputs.suite) || '' }}
+        run: npm run ci:summary
+
+      - name: Generate Allure report
+        if: always()
+        run: npm run report:generate
+
+      - name: Upload Allure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report-api${{ matrix.api-level }}
+          path: |
+            reports/allure-report
+            reports/allure-results
+          retention-days: 14
+          if-no-files-found: warn
+
+  # Collection report kustom: screenshot per langkah + tabel Expected/Actual per case ID, HTML & PDF
+  # per fitur. Jauh lebih lama dari suite biasa karena menjalankan SEMUA collection, jadi tidak
+  # pernah dijalankan di PR.
+  collection-report:
+    name: Collection report (HTML + PDF)
+    needs: typecheck
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.collection_report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PLATFORM_VERSION: '13'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: npm ci
+
+      - name: Download APK My Demo App
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p apps
+          gh release download --repo saucelabs/my-demo-app-android \
+            --pattern 'mda-*.apk' --dir apps --clobber
+          rm -f apps/mda-androidTest-*.apk
+          echo "APP_PATH=$(ls apps/mda-*.apk | head -1)" >> "$GITHUB_ENV"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Capture & build report
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            # run-multidevice-reports.ts membuka app lewat appPackage/appActivity dan tidak meng-install
+            # sendiri, jadi APK dipasang lebih dulu di sini.
+            adb install -r "$APP_PATH"
+            npm run report:capture
+            npm run report:build
+
+      - name: Upload collection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-report
+          path: |
+            reports/*.html
+            reports/*.pdf
+            reports/screenshots
+          retention-days: 14
+          if-no-files-found: warn

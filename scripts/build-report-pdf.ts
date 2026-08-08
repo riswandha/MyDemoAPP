@@ -181,13 +181,23 @@ const html = `<!doctype html>
 fs.writeFileSync(htmlFile, html);
 console.log(`HTML report tersimpan di: ${htmlFile}`);
 
+// Kandidat lokasi Chrome/Chromium: macOS (run lokal) lalu Linux (runner CI). CHROME_PATH dicoba
+// paling awal supaya bisa dioverride tanpa mengubah kode bila binary ada di lokasi tidak standar.
 const chromeCandidates = [
+  process.env.CHROME_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
-];
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/chromium',
+].filter((p): p is string => Boolean(p));
 const chromePath = chromeCandidates.find((p) => fs.existsSync(p));
 if (!chromePath) {
-  throw new Error('Google Chrome tidak ditemukan di lokasi standar macOS.');
+  throw new Error(
+    `Chrome/Chromium tidak ditemukan. Lokasi yang dicoba:\n${chromeCandidates.join('\n')}\n` +
+      'Set env CHROME_PATH ke binary Chrome bila terpasang di lokasi lain.'
+  );
 }
 
 execFileSync(chromePath, [
