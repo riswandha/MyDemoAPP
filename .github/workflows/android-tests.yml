@@ -32,9 +32,14 @@ on:
         default: false
         type: boolean
 
-# Push beruntun ke branch yang sama membatalkan run lama - hemat waktu runner & antrean emulator.
+# Push beruntun ke ref yang sama membatalkan run lama - hemat waktu runner & antrean emulator.
+#
+# Run manual (workflow_dispatch) SENGAJA dikecualikan dengan menyisipkan run_id ke nama group,
+# sehingga tiap dispatch punya group sendiri: tidak membatalkan run lain dan tidak dibatalkan run
+# lain. Tanpa ini, dua dispatch berurutan di branch yang sama saling membunuh - persis yang terjadi
+# saat menguji ulang suite catalog lalu cart di branch ini, dan run pertama hilang tanpa hasil.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'shared' }}
   cancel-in-progress: true
 
 env:
