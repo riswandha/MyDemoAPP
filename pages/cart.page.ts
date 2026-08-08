@@ -1,4 +1,5 @@
 import BasePage from './base.page';
+import type { PlatformSelector } from '../locators/types';
 import { CartLocators } from '../locators/cart.locators';
 
 // CartPage = Page Object untuk halaman "My Cart".
@@ -28,19 +29,27 @@ class CartPage extends BasePage {
     await this.click(CartLocators.proceedToCheckoutButton);
   }
 
-  // Naikkan/turunkan quantity item di cart sejumlah `times` kali tap. Beri jeda singkat tiap tap
-  // supaya UI (angka quantity & subtotal) sempat re-render sebelum tap berikutnya/pembacaan nilai.
+  // Naikkan/turunkan quantity item di cart sejumlah `times` kali tap. Tiap tap menunggu angka
+  // quantity benar-benar berubah sebelum tap berikutnya - berbasis kondisi, menggantikan
+  // browser.pause(300) yang dilarang aturan anti-flaky. Subtotal di-render app bersamaan dengan
+  // angka quantity, jadi perubahan angka itu sekaligus menandakan subtotal sudah ikut ter-update.
   async increaseQty(times = 1): Promise<void> {
-    for (let i = 0; i < times; i++) {
-      await this.click(CartLocators.increaseQtyButton);
-      await browser.pause(300);
-    }
+    await this.changeQty(CartLocators.increaseQtyButton, times, +1);
   }
 
   async decreaseQty(times = 1): Promise<void> {
+    await this.changeQty(CartLocators.decreaseQtyButton, times, -1);
+  }
+
+  private async changeQty(button: PlatformSelector, times: number, delta: 1 | -1): Promise<void> {
     for (let i = 0; i < times; i++) {
-      await this.click(CartLocators.decreaseQtyButton);
-      await browser.pause(300);
+      const before = Number(await this.getItemQuantity());
+      const expected = before + delta;
+      await this.click(button);
+      await browser.waitUntil(async () => Number(await this.getItemQuantity()) === expected, {
+        timeout: 10000,
+        timeoutMsg: `Quantity item di cart tidak berubah menjadi ${expected} setelah tap tombol qty`,
+      });
     }
   }
 

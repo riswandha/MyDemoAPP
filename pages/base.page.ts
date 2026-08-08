@@ -27,6 +27,14 @@ export default class BasePage {
     await element.waitForDisplayed({ timeout });
   }
 
+  // Menunggu sampai elemen TIDAK lagi tampil - mis. modal/overlay selesai menutup. Penting sebelum
+  // mengirim aksi ke layar di belakangnya: selama overlay masih ada, tap maupun tombol back diterima
+  // oleh overlay, bukan oleh layar tujuan, dan aksinya hilang tanpa error.
+  async waitForNotDisplayed(selector: PlatformSelector, timeout = 10000): Promise<void> {
+    const element = await $(this.platformLocator(selector));
+    await element.waitForDisplayed({ timeout, reverse: true });
+  }
+
   // Klik elemen: menunggu elemen tampil dulu baru diklik, agar tidak error saat elemen belum ready
   async click(selector: PlatformSelector): Promise<void> {
     const element = await $(this.platformLocator(selector));
@@ -80,6 +88,38 @@ export default class BasePage {
       direction,
       percent,
     })) as unknown as boolean;
+  }
+
+  // Scroll berulang sampai elemen TARGET benar-benar tampil, lalu berhenti. Mengembalikan status
+  // akhir apakah elemen tampil.
+  //
+  // Dipakai menggantikan pola "scroll sekali lalu berharap" - sekali gesture cukup di satu ukuran
+  // layar tapi belum tentu di layar/versi Android lain, dan memakai elemen LAIN sebagai penanda
+  // (mis. menunggu tombol Add to Cart padahal yang mau di-tap tombol plus) bisa berhenti terlalu
+  // dini saat elemen yang dituju masih di luar viewport.
+  //
+  // Berhenti pada tiga kondisi, jadi tidak pernah loop tak berujung: elemen sudah tampil, device
+  // melaporkan tidak bisa scroll lagi, atau batas aman maxScrolls tercapai.
+  protected async scrollUntilDisplayed(
+    selector: PlatformSelector,
+    viewport?: { topRatio: number; heightRatio: number },
+    maxScrolls = 10,
+  ): Promise<boolean> {
+    const visible = () => this.isDisplayed(selector).catch(() => false);
+    if (await visible()) {
+      return true;
+    }
+
+    let canScrollMore = true;
+    let attempts = 0;
+    while (canScrollMore && attempts < maxScrolls) {
+      canScrollMore = await this.scrollGesture('down', 0.8, viewport);
+      attempts++;
+      if (await visible()) {
+        return true;
+      }
+    }
+    return visible();
   }
 
   // Tap pada titik relatif terhadap ukuran layar (0..1). Dipakai mis. menutup drawer dengan menekan

@@ -20,15 +20,26 @@ on:
         default: 'smoke'
         type: choice
         options: ['smoke', 'all', 'login', 'catalog', 'cart', 'checkout', 'menu']
+      api_level:
+        description: 'API level emulator (untuk menguji ulang kegagalan spesifik versi Android)'
+        required: false
+        default: '33'
+        type: choice
+        options: ['33', '30', '34', '36']
       collection_report:
         description: 'Jalankan juga collection report (HTML + PDF). Lama.'
         required: false
         default: false
         type: boolean
 
-# Push beruntun ke branch yang sama membatalkan run lama - hemat waktu runner & antrean emulator.
+# Push beruntun ke ref yang sama membatalkan run lama - hemat waktu runner & antrean emulator.
+#
+# Run manual (workflow_dispatch) SENGAJA dikecualikan dengan menyisipkan run_id ke nama group,
+# sehingga tiap dispatch punya group sendiri: tidak membatalkan run lain dan tidak dibatalkan run
+# lain. Tanpa ini, dua dispatch berurutan di branch yang sama saling membunuh - persis yang terjadi
+# saat menguji ulang suite catalog lalu cart di branch ini, dan run pertama hilang tanpa hasil.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'shared' }}
   cancel-in-progress: true
 
 env:
@@ -72,8 +83,14 @@ jobs:
           # platform-version WAJIB cocok dengan api-level: utils/env.ts selalu mengirim
           # appium:platformVersion (default '13') saat single device, dan versi yang tidak cocok
           # membuat pembuatan sesi UiAutomator2 gagal.
-          single='{"include":[{"api-level":33,"platform-version":"13"}]}'
-          full='{"include":[{"api-level":30,"platform-version":"11"},{"api-level":33,"platform-version":"13"},{"api-level":34,"platform-version":"14"}]}'
+          # api-level = nomor platform Android dari Google (30=Android 11, 33=Android 13,
+          # 34=Android 14, 36=Android 16). platform-version = string versi rilis yang dikirim Appium.
+          api30='{"include":[{"api-level":30,"platform-version":"11"}]}'
+          api33='{"include":[{"api-level":33,"platform-version":"13"}]}'
+          api34='{"include":[{"api-level":34,"platform-version":"14"}]}'
+          api36='{"include":[{"api-level":36,"platform-version":"16"}]}'
+          single="$api33"
+          full='{"include":[{"api-level":30,"platform-version":"11"},{"api-level":33,"platform-version":"13"},{"api-level":34,"platform-version":"14"},{"api-level":36,"platform-version":"16"}]}'
 
           case "${{ github.event_name }}" in
             pull_request)
@@ -86,7 +103,14 @@ jobs:
               # "all" adalah sentinel untuk "tanpa --suite" - choice input tidak menerima opsi string kosong.
               suite="${{ inputs.suite }}"
               if [ "$suite" = "all" ]; then suite=""; fi
-              matrix="$single"
+              # Satu API level saja, dipilih lewat input - untuk menguji ulang kegagalan yang hanya
+              # muncul di versi Android tertentu tanpa membayar biaya matrix penuh.
+              case "${{ inputs.api_level }}" in
+                30) matrix="$api30" ;;
+                34) matrix="$api34" ;;
+                36) matrix="$api36" ;;
+                *)  matrix="$api33" ;;
+              esac
               ;;
             *)
               # schedule: collection report yang mengambil alih, test biasa cukup satu API level.

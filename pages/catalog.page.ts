@@ -20,6 +20,21 @@ class CatalogPage extends BasePage {
     await this.click(CatalogLocators.cartIcon);
   }
 
+  // Tunggu sampai layar Katalog benar-benar siap dipakai, ditandai ikon sort di header sudah ter-render.
+  // Berbasis kondisi elemen, bukan delay tetap, sesuai aturan anti-flaky.
+  async waitUntilLoaded(timeout = 15000): Promise<void> {
+    await this.waitForDisplayed(CatalogLocators.sortIcon, timeout);
+  }
+
+  // Kembali ke Katalog dari halaman Detail Produk lewat tombol back Android, lalu tunggu katalog
+  // benar-benar tampil. Dipisahkan jadi method sendiri supaya spec tidak memanggil driver.back()
+  // telanjang yang selesai duluan sebelum transisi fragment beres - penyebab test berikutnya
+  // mengira dirinya sudah di Katalog padahal masih di Detail Produk.
+  async returnFromProductDetail(): Promise<void> {
+    await driver.back();
+    await this.waitUntilLoaded();
+  }
+
   // Buka menu Sort lalu pilih salah satu urutan (menu otomatis tertutup & grid produk ter-refresh
   // begitu salah satu opsi dipilih)
   async sortBy(option: SortOption): Promise<void> {
