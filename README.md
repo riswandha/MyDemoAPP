@@ -154,7 +154,7 @@ emulator lambat, jadi full regression tidak dijalankan di setiap commit.
 |---|---|
 | Pull request | `typecheck` + suite `smoke` di API 33 |
 | Push ke `main` | Seluruh spec × matrix API 30 / 33 / 34 / 36 |
-| Nightly (18:00 UTC) | Collection report HTML + PDF |
+| Mingguan (Sabtu 01:00 WIB) | Collection report HTML + PDF |
 | Manual (`workflow_dispatch`) | Pilih suite & API level sendiri, opsional collection report |
 
 APK di-download saat runtime dari GitHub Release `saucelabs/my-demo-app-android` (tidak pernah

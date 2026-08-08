@@ -3,15 +3,20 @@ name: Android Tests
 # Strategi eksekusi (sesuai aturan CLAUDE.md: device farm mahal & lambat, jangan full regression tiap commit):
 #   - Pull request       -> typecheck + suite `smoke` di satu API level
 #   - Push ke main       -> seluruh spec di beberapa API level (matrix)
-#   - Nightly / manual   -> collection report (HTML + PDF per fitur) sebagai artifact
+#   - Mingguan / manual  -> collection report (HTML + PDF per fitur) sebagai artifact
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
   schedule:
-    # 18:00 UTC = 01:00 WIB. Nightly untuk collection report yang panjang.
-    - cron: '0 18 * * *'
+    # Mingguan, tiap Sabtu 01:00 WIB - untuk collection report yang panjang (kelima collection di
+    # emulator, bisa 30-60 menit). Sebelumnya harian, tapi laporan ini bukan gerbang kualitas
+    # melainkan bukti untuk dilaporkan, jadi harian hanya membakar waktu runner.
+    #
+    # PENTING: cron GitHub Actions memakai UTC. WIB = UTC+7, jadi Sabtu 01:00 WIB adalah JUMAT 18:00
+    # UTC -> day-of-week 5, BUKAN 6. Menulis '0 18 * * 6' akan jatuh di Minggu 01:00 WIB.
+    - cron: '0 18 * * 5'
   workflow_dispatch:
     inputs:
       suite:
