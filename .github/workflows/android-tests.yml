@@ -192,6 +192,26 @@ jobs:
           npx appium driver install --source=npm "appium-uiautomator2-driver@$VERSION"
           npx appium driver list --installed
 
+      # Emulator butuh ~7,4 GB untuk membuat partisi userdata, sementara image ubuntu-latest kadang
+      # hanya menyisakan ~4,3 GB. Saat itu terjadi, emulator mati DI DETIK KETIGA dengan
+      # "FATAL | Not enough space to create userdata partition", lalu action tetap mem-polling device
+      # yang tidak akan pernah ada sampai menyerah 10 menit kemudian dengan pesan menyesatkan
+      # "Timeout waiting for emulator to boot". Terjadi 3x berturut-turut di job API 33
+      # (run 31253853848 dua kali, dan 31256363190), selalu dengan sisa disk 4312-4316 MB.
+      #
+      # Yang dihapus adalah komponen image yang TIDAK dipakai project ini sama sekali. NDK saja
+      # (~6-11 GB) sudah jauh melebihi kekurangan ~3 GB.
+      #
+      # JANGAN menghapus /opt/hostedtoolcache: di situlah Node & Java hasil setup-node/setup-java
+      # dipasang. Banyak contoh di internet membuangnya demi ruang - di sini itu akan melenyapkan
+      # Node dan Java yang baru saja disiapkan dan merusak seluruh job.
+      - name: Bebaskan ruang disk runner
+        run: |
+          echo "Sebelum:"; df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/heroku
+          echo "Sesudah:"; df -h / | tail -1
+
       # Tanpa ini emulator jatuh ke emulasi software yang terlalu lambat untuk flow checkout.
       - name: Enable KVM
         run: |
@@ -308,6 +328,15 @@ jobs:
           VERSION="$(node -p "require('./node_modules/appium-uiautomator2-driver/package.json').version")"
           npx appium driver install --source=npm "appium-uiautomator2-driver@$VERSION"
           npx appium driver list --installed
+
+      # Lihat alasan lengkapnya di job `test` - emulator butuh ~7,4 GB dan runner kadang hanya
+      # menyisakan ~4,3 GB, membuat emulator mati sebelum boot.
+      - name: Bebaskan ruang disk runner
+        run: |
+          echo "Sebelum:"; df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/heroku
+          echo "Sesudah:"; df -h / | tail -1
 
       - name: Enable KVM
         run: |
