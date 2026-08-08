@@ -145,6 +145,20 @@ jobs:
           echo "APP_PATH=$APK" >> "$GITHUB_ENV"
           echo "APK yang dipakai: $APK"
 
+      # config/wdio.shared.conf.ts mengarahkan APPIUM_HOME ke .appium/ milik project, tapi folder itu
+      # gitignored - di runner ia tidak ada sama sekali, sehingga Appium start tanpa driver apa pun dan
+      # pembuatan sesi gagal dengan "Could not find a driver for automationName 'UiAutomator2'".
+      # Versi dibaca dari node_modules (hasil npm ci) supaya CI memakai versi yang sama persis dengan
+      # package-lock.json, bukan versi terbaru yang kebetulan ada di npm.
+      - name: Install driver Appium (UiAutomator2)
+        env:
+          APPIUM_HOME: ${{ github.workspace }}/.appium
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./node_modules/appium-uiautomator2-driver/package.json').version")"
+          npx appium driver install --source=npm "appium-uiautomator2-driver@$VERSION"
+          npx appium driver list --installed
+
       # Tanpa ini emulator jatuh ke emulasi software yang terlalu lambat untuk flow checkout.
       - name: Enable KVM
         run: |
@@ -229,6 +243,16 @@ jobs:
             --pattern 'mda-*.apk' --dir apps --clobber
           rm -f apps/mda-androidTest-*.apk
           echo "APP_PATH=$(ls apps/mda-*.apk | head -1)" >> "$GITHUB_ENV"
+
+      # Lihat catatan di job `test`: .appium/ gitignored, jadi driver harus dipasang di runner.
+      - name: Install driver Appium (UiAutomator2)
+        env:
+          APPIUM_HOME: ${{ github.workspace }}/.appium
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./node_modules/appium-uiautomator2-driver/package.json').version")"
+          npx appium driver install --source=npm "appium-uiautomator2-driver@$VERSION"
+          npx appium driver list --installed
 
       - name: Enable KVM
         run: |
