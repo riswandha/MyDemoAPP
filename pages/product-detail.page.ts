@@ -66,8 +66,12 @@ class ProductDetailPage extends BasePage {
     return this.getText(ProductDetailLocators.reviewConfirmMessage);
   }
 
+  // Tutup modal konfirmasi review, lalu TUNGGU modal benar-benar hilang sebelum return. Tanpa wait
+  // ini, aksi berikutnya (mis. tombol back untuk kembali ke katalog) dikirim saat modal masih dalam
+  // animasi menutup, sehingga ditelan oleh modal dan layar tidak pernah berpindah.
   async closeReviewConfirmModal(): Promise<void> {
     await this.click(ProductDetailLocators.reviewConfirmCloseButton);
+    await this.waitForNotDisplayed(ProductDetailLocators.reviewConfirmMessage);
   }
 }
 

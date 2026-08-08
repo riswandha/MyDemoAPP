@@ -11,10 +11,20 @@ export async function resetAppBeforeSession(): Promise<void> {
   await restartAppToInitialState(env.appPackage);
 }
 
-// Dijalankan di hook `afterTest`: ambil screenshot hanya saat test gagal, untuk keperluan debugging
-// (dilampirkan otomatis oleh Allure reporter).
+// Dijalankan di hook `afterTest`: ambil screenshot hanya saat test gagal, untuk keperluan debugging.
+//
+// Screenshot dilampirkan EKSPLISIT ke Allure lewat addAttachment. Sebelumnya hanya memanggil
+// browser.takeScreenshot() dan mengandalkan disableWebdriverScreenshotsReporting: false untuk
+// melampirkannya otomatis - ternyata tidak terjadi: hasil run CI memuat 0 attachment pada test yang
+// gagal, sehingga kegagalan tidak bisa didiagnosis dari report sama sekali.
 export async function captureScreenshotOnFailure(passed: boolean): Promise<void> {
-  if (!passed) {
-    await browser.takeScreenshot();
+  if (passed) {
+    return;
   }
+  const screenshot = await browser.takeScreenshot();
+  // '@wdio/allure-reporter' dipublikasikan sebagai ESM murni; di-import dinamis supaya bisa dipakai
+  // dari modul CommonJS ini tanpa mengubah "module" project secara keseluruhan - pola yang sama
+  // dipakai scripts/generate-report.ts untuk 'webdriverio'.
+  const { default: allureReporter } = await import('@wdio/allure-reporter');
+  allureReporter.addAttachment('Screenshot kegagalan', Buffer.from(screenshot, 'base64'), 'image/png');
 }

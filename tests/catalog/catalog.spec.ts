@@ -48,9 +48,10 @@ describe('Catalog Feature', () => {
     expect(await ProductDetailPage.getReviewConfirmMessage()).toBe('Thank you for submitting your review!');
     await ProductDetailPage.closeReviewConfirmModal();
 
-    // Kembali ke halaman Katalog (tombol back Android, standar untuk pop fragment detail produk ->
-    // katalog) supaya TC003 (Sort) di bawah bisa langsung mengakses ikon sort di header Katalog.
-    await driver.back();
+    // Kembali ke halaman Katalog supaya TC003 (Sort) di bawah bisa langsung mengakses ikon sort di
+    // header Katalog. Lewat page object yang menunggu katalog benar-benar tampil, bukan driver.back()
+    // telanjang: back() selesai seketika sementara transisi fragment masih berjalan.
+    await CatalogPage.returnFromProductDetail();
   });
 
   // TS002/TC003 - Mengurutkan produk berdasarkan nama/harga. Verifikasi dilakukan dengan membandingkan

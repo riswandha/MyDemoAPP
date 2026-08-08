@@ -27,6 +27,14 @@ export default class BasePage {
     await element.waitForDisplayed({ timeout });
   }
 
+  // Menunggu sampai elemen TIDAK lagi tampil - mis. modal/overlay selesai menutup. Penting sebelum
+  // mengirim aksi ke layar di belakangnya: selama overlay masih ada, tap maupun tombol back diterima
+  // oleh overlay, bukan oleh layar tujuan, dan aksinya hilang tanpa error.
+  async waitForNotDisplayed(selector: PlatformSelector, timeout = 10000): Promise<void> {
+    const element = await $(this.platformLocator(selector));
+    await element.waitForDisplayed({ timeout, reverse: true });
+  }
+
   // Klik elemen: menunggu elemen tampil dulu baru diklik, agar tidak error saat elemen belum ready
   async click(selector: PlatformSelector): Promise<void> {
     const element = await $(this.platformLocator(selector));
