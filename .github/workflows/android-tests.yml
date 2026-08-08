@@ -245,18 +245,22 @@ jobs:
           # belakangnya. Dimatikan di level device, bukan dikompensasi dengan retry: dialognya tidak
           # pernah hilang sendiri, jadi retry hanya mengulang kegagalan yang sama.
           #
-          # Baris kedua: setelah wdio selesai, emulator DIPAKSA mati. Sebabnya, `adb emu kill` yang
-          # dijalankan action ini sendiri pernah dijawab "OK: killing emulator, bye bye" padahal
-          # proses qemu-nya tidak pernah benar-benar berakhir; action lalu menunggunya tanpa batas.
-          # Di run 31253853848 job API 36 itu menyandera runner 38 menit setelah SELURUH test lulus,
-          # sampai dihentikan paksa oleh timeout - 60 menit kuota terbakar untuk run yang sebenarnya
-          # hijau. `pkill -9` memastikan prosesnya benar-benar mati sehingga tidak ada yang ditunggu.
+          # CATATAN soal emulator yang kadang menggantung saat dimatikan (run 31253853848 job API 36:
+          # `adb emu kill` dijawab "OK" tapi proses qemu tidak pernah berakhir, action menunggunya 38
+          # menit setelah seluruh test lulus, lalu dihentikan timeout):
           #
-          # Exit code wdio disimpan dulu dan dikembalikan di akhir, supaya pembersihan ini TIDAK
-          # menyembunyikan kegagalan test (tanpa itu, exit code yang terbaca adalah milik pkill).
+          # Menambahkan `pkill -9 -f qemu-system-x86_64` di sini SUDAH DICOBA dan HARUS DIHINDARI.
+          # Emulator dijalankan action lewat pembungkus `sh`, jadi mem-SIGKILL qemu ikut mematikan
+          # pembungkus itu secara tak wajar dan action menggagalkan job dengan
+          # "The process '/usr/bin/sh' failed with exit code null" - PADAHAL test-nya lulus.
+          # Terbukti di run 31256940720: test hijau, job merah. Itu menukar kegagalan yang jarang
+          # (hang sesekali) dengan kegagalan yang selalu terjadi.
+          #
+          # Penanganan yang dipakai sekarang hanyalah membatasi kerugian lewat `timeout-minutes` di
+          # atas. Hang-nya sendiri berasal dari action/emulator, bukan dari kode project ini.
           script: |
             adb shell settings put global hide_error_dialogs 1 && adb shell settings get global hide_error_dialogs
-            npx wdio run ./config/wdio.android.conf.ts ${{ needs.prepare.outputs.suite-args }}; code=$?; adb -s emulator-5554 emu kill >/dev/null 2>&1 || true; pkill -9 -f qemu-system-x86_64 >/dev/null 2>&1 || true; exit $code
+            npx wdio run ./config/wdio.android.conf.ts ${{ needs.prepare.outputs.suite-args }}
 
       - name: Tulis ringkasan ke job summary
         if: always()
@@ -366,7 +370,7 @@ jobs:
             adb shell settings put global hide_error_dialogs 1 && adb shell settings get global hide_error_dialogs
             adb install -r "$APP_PATH"
             npm run report:capture
-            npm run report:build; code=$?; adb -s emulator-5554 emu kill >/dev/null 2>&1 || true; pkill -9 -f qemu-system-x86_64 >/dev/null 2>&1 || true; exit $code
+            npm run report:build
 
       - name: Upload collection report
         if: always()
