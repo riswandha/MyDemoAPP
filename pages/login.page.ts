@@ -3,16 +3,35 @@ import { LoginLocators } from '../locators/login.locators';
 
 // LoginPage = Page Object untuk layar Login pada app "My Demo App" (com.saucelabs.mydemoapp.android).
 class LoginPage extends BasePage {
+  // Buka drawer menu lalu tunggu isinya benar-benar ter-render, ditandai munculnya item "Log In"
+  // (kondisi belum login) ATAU "Log Out" (kondisi sudah login) - salah satunya PASTI ada di kedua
+  // kondisi. Menunggu kondisi elemen, bukan delay tetap: selama drawer masih beranimasi, pembacaan
+  // isDisplayed() bisa mengembalikan false padahal itemnya sebentar lagi muncul, dan pemanggilnya
+  // salah menyimpulkan status login.
+  private async openDrawer(): Promise<void> {
+    await this.click(LoginLocators.menuIcon);
+    await driver.waitUntil(
+      async () =>
+        (await this.isDisplayed(LoginLocators.logoutMenuItem).catch(() => false)) ||
+        (await this.isDisplayed(LoginLocators.loginMenuItem).catch(() => false)),
+      {
+        timeout: 10000,
+        interval: 200,
+        timeoutMsg: 'Drawer menu tidak terbuka: item "Log In"/"Log Out" tidak muncul dalam 10 detik.',
+      },
+    );
+  }
+
   // Buka drawer menu lalu pilih "Log In" untuk masuk ke layar login.
   // Karena state app persist antar test run (noReset), kalau session sebelumnya masih dalam kondisi
   // login, logout dulu supaya spec ini bisa jalan sendiri dari kondisi apa pun (independen dari
   // urutan/hasil test lain).
   async openLoginScreen(): Promise<void> {
-    await this.click(LoginLocators.menuIcon);
+    await this.openDrawer();
     if (await this.isDisplayed(LoginLocators.logoutMenuItem)) {
       await this.click(LoginLocators.logoutMenuItem);
       await this.click(LoginLocators.logoutConfirmButton);
-      await this.click(LoginLocators.menuIcon);
+      await this.openDrawer();
     }
     await this.click(LoginLocators.loginMenuItem);
   }
@@ -49,11 +68,16 @@ class LoginPage extends BasePage {
   // (mis. click(menuIcon) di test/openLoginScreen selanjutnya) gagal ditemukan.
   // Return true jika item "Log Out" tampil (= sudah login).
   async isLoggedIn(): Promise<boolean> {
-    await this.click(LoginLocators.menuIcon);
-    await driver.pause(500);
+    await this.openDrawer();
     const loggedIn = await this.isDisplayed(LoginLocators.logoutMenuItem);
+
+    // Tunggu drawer benar-benar tertutup sebelum method ini selesai: selama drawer/scrim masih ada,
+    // tap berikutnya diterima oleh overlay dan hilang tanpa error. Penanda yang ditunggu adalah item
+    // yang tadi memang tampil (openDrawer() menjamin salah satunya ada), jadi hilangnya item itu =
+    // drawer sudah menutup.
     await this.tapAtRatio(0.9, 0.3);
-    await driver.pause(300);
+    await this.waitForNotDisplayed(loggedIn ? LoginLocators.logoutMenuItem : LoginLocators.loginMenuItem);
+
     return loggedIn;
   }
 }

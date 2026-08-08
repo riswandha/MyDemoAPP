@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { resolvePlatformSelector, type PlatformSelector } from '../../locators/types';
 
 dotenv.config();
 
@@ -35,6 +36,9 @@ export interface DeviceMeta {
 
 export interface ReportRuntime {
   client: WebdriverIO.Browser;
+  // Ambil elemen dari locator resmi di file locators/ (bukan selector yang ditulis ulang di script
+  // laporan). Resolusi platform-nya sama persis dengan yang dipakai page object lewat BasePage.
+  element(selector: PlatformSelector): ReturnType<WebdriverIO.Browser['$']>;
   startCase(caseId: string, ref: string, title: string): void;
   captureStep(caseId: string, description: string): Promise<void>;
   verify(caseId: string, item: string, expected: string, actual: string): void;
@@ -108,6 +112,13 @@ export async function createRuntime(collection: string): Promise<ReportRuntime> 
   const cases: CaseMeta[] = [];
   const caseCounters: Record<string, number> = {};
 
+  // Jembatan ke file locators/: script laporan butuh memecah aksi page object jadi langkah-langkah
+  // kecil demi bukti visual per langkah, tapi TIDAK boleh menulis ulang selector-nya sendiri -
+  // duplikat seperti itu diam-diam menyimpang begitu locator aslinya berubah.
+  function element(selector: PlatformSelector) {
+    return client.$(resolvePlatformSelector(selector, client.isIOS));
+  }
+
   function startCase(caseId: string, ref: string, title: string): void {
     cases.push({ caseId, ref, title });
     console.log(`\n=== [${currentDevice.label}] ${ref} - ${title} ===`);
@@ -143,7 +154,7 @@ export async function createRuntime(collection: string): Promise<ReportRuntime> 
   await client.activateApp(appPackage);
   await client.pause(1200);
 
-  return { client, startCase, captureStep, verify, finish };
+  return { client, element, startCase, captureStep, verify, finish };
 }
 
 export async function writeReportData(
