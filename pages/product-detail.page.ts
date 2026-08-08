@@ -1,4 +1,5 @@
 import BasePage from './base.page';
+import type { PlatformSelector } from '../locators/types';
 import {
   ProductDetailLocators,
   ratingStarLocator,
@@ -16,34 +17,44 @@ class ProductDetailPage extends BasePage {
     return this.getText(ProductDetailLocators.priceText);
   }
 
+  // Angka quantity berada di bagian bawah halaman detail, sering di luar viewport awal - scroll dulu
+  // ke elemennya sendiri sebelum dibaca.
   async getQuantity(): Promise<string> {
+    await this.scrollToDetailElement(ProductDetailLocators.quantityText);
+    return this.readQuantity();
+  }
+
+  // Baca angka quantity TANPA scroll. Dipakai di dalam polling waitUntil, di mana elemen sudah pasti
+  // tampil dan scroll ulang justru akan menggeser layar saat sedang menunggu.
+  private async readQuantity(): Promise<string> {
     return this.getText(ProductDetailLocators.quantityText);
   }
 
-  // Tombol quantity & Add to cart kadang berada di bawah layar (di luar viewport awal) sampai gambar
-  // produk selesai dimuat, sehingga bounds-nya belum ter-render; scroll dulu kalau memang belum
-  // kelihatan supaya elemen bisa ditemukan & di-tap dengan benar.
-  private async scrollToAddToCartSectionIfNeeded(): Promise<void> {
-    if (await this.isDisplayed(ProductDetailLocators.addToCartButton)) {
-      return;
-    }
-    // Area scroll khusus halaman detail (mulai dari 20% tinggi, tinggi 60%) supaya bagian bawah
-    // (tombol qty & Add to Cart) terbawa masuk viewport.
-    await this.scrollGesture('down', 0.8, { topRatio: 0.2, heightRatio: 0.6 });
+  // Scroll di area khusus halaman detail (mulai 20% tinggi, tinggi 60%) sampai elemen yang DITUJU
+  // benar-benar tampil. Sebelumnya semua aksi memakai tombol Add to Cart sebagai penanda dan hanya
+  // scroll sekali; di layar Android 11 (API 30) itu berhenti terlalu dini sehingga tombol plus dan
+  // angka quantity tidak pernah masuk viewport, dan seluruh test yang menaikkan quantity gagal.
+  private async scrollToDetailElement(selector: PlatformSelector): Promise<void> {
+    await this.scrollUntilDisplayed(selector, { topRatio: 0.2, heightRatio: 0.6 });
   }
 
-  // Naikkan quantity produk sejumlah `times` kali tap tombol plus. Beri jeda singkat tiap tap supaya
-  // UI (angka quantity) sempat re-render sebelum tap berikutnya/pembacaan nilai.
+  // Naikkan quantity produk sejumlah `times` kali tap tombol plus. Setiap tap menunggu angka
+  // quantity benar-benar bertambah sebelum tap berikutnya - berbasis kondisi, menggantikan
+  // browser.pause(300) yang dilarang aturan anti-flaky.
   async increaseQuantity(times: number): Promise<void> {
-    await this.scrollToAddToCartSectionIfNeeded();
+    await this.scrollToDetailElement(ProductDetailLocators.plusButton);
     for (let i = 0; i < times; i++) {
+      const before = Number(await this.readQuantity());
       await this.click(ProductDetailLocators.plusButton);
-      await browser.pause(300);
+      await browser.waitUntil(async () => Number(await this.readQuantity()) === before + 1, {
+        timeout: 10000,
+        timeoutMsg: `Quantity produk tidak berubah menjadi ${before + 1} setelah tap tombol plus`,
+      });
     }
   }
 
   async addToCart(): Promise<void> {
-    await this.scrollToAddToCartSectionIfNeeded();
+    await this.scrollToDetailElement(ProductDetailLocators.addToCartButton);
     await this.click(ProductDetailLocators.addToCartButton);
   }
 
