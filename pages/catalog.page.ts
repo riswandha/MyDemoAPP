@@ -1,6 +1,7 @@
 import BasePage from './base.page';
 import type { PlatformSelector } from '../locators/types';
 import { CatalogLocators, productImageLocator, sortOptionLocator, SortOption } from '../locators/catalog.locators';
+import { ProductDetailLocators } from '../locators/product-detail.locators';
 
 export type { SortOption };
 
@@ -34,12 +35,21 @@ class CatalogPage extends BasePage {
     await this.waitForDisplayed(CatalogLocators.sortIcon, timeout);
   }
 
-  // Kembali ke Katalog dari halaman Detail Produk lewat tombol back Android, lalu tunggu katalog
-  // benar-benar tampil. Dipisahkan jadi method sendiri supaya spec tidak memanggil driver.back()
-  // telanjang yang selesai duluan sebelum transisi fragment beres - penyebab test berikutnya
-  // mengira dirinya sudah di Katalog padahal masih di Detail Produk.
+  // Kembali ke Katalog dari halaman Detail Produk, lalu tunggu katalog benar-benar tampil. Dipisahkan
+  // jadi method sendiri supaya spec tidak memanggil navigasi mentah yang selesai duluan sebelum
+  // transisi fragment/layar beres - penyebab test berikutnya mengira dirinya sudah di Katalog padahal
+  // masih di Detail Produk.
+  //
+  // SATU-SATUNYA percabangan platform di file ini: Android punya tombol back sistem (driver.back()),
+  // sedangkan iOS tidak - device iOS tidak punya tombol back hardware, dan driver.back() TERBUKTI
+  // TIDAK BEKERJA di iOS (dicoba langsung di device: layar tetap di Detail Produk sesudahnya). Satu-
+  // satunya cara di iOS adalah tap tombol back di UI, lihat ProductDetailLocators.backButton.
   async returnFromProductDetail(): Promise<void> {
-    await driver.back();
+    if (driver.isIOS) {
+      await this.click(ProductDetailLocators.backButton);
+    } else {
+      await driver.back();
+    }
     await this.waitUntilLoaded();
   }
 

@@ -44,6 +44,10 @@ function verifyMoney(
 async function main() {
   const rt = await createRuntime('cart');
   const { client } = rt;
+  // cartProduct berbeda per platform (lihat catatan di utils/test-data.ts) - script ini memakai
+  // `client` dari webdriverio remote() langsung, bukan global `driver` milik runner WDIO, jadi
+  // diresolusi manual di sini alih-alih lewat platformText().
+  const product = client.isIOS ? cartProduct.ios : cartProduct.android;
 
   async function resetCart(caseId: string): Promise<void> {
     await CatalogPage.openCart();
@@ -58,9 +62,9 @@ async function main() {
     rt.startCase(caseId, 'TS003/TC001', 'Menambahkan produk ke keranjang dengan warna & quantity tertentu');
     await resetCart(caseId);
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(product);
     await ProductDetailPage.selectColor(cartProductColor);
-    await rt.captureStep(caseId, `Buka produk "${cartProduct}", pilih warna ${cartProductColor}`);
+    await rt.captureStep(caseId, `Buka produk "${product}", pilih warna ${cartProductColor}`);
 
     await ProductDetailPage.increaseQuantity(addProductData.quantity - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
@@ -71,7 +75,7 @@ async function main() {
     await rt.captureStep(caseId, 'Add to Cart, lalu buka halaman Cart');
 
     const itemTitle = await CartPage.getItemTitle();
-    rt.verify(caseId, 'Judul item di Cart', cartProduct, itemTitle);
+    rt.verify(caseId, 'Judul item di Cart', product, itemTitle);
     const itemQty = await CartPage.getItemQuantity();
     rt.verify(caseId, 'Quantity item di Cart', String(addProductData.quantity), itemQty);
     const totalPrice = parsePrice(await CartPage.getTotalPrice());
@@ -85,10 +89,10 @@ async function main() {
     rt.startCase(caseId, 'TS003/TC002', 'Menghapus produk dari keranjang');
     await resetCart(caseId);
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(product);
     await ProductDetailPage.addToCart();
     await ProductDetailPage.openCart();
-    await rt.captureStep(caseId, `Tambahkan "${cartProduct}" ke cart, lalu buka halaman Cart`);
+    await rt.captureStep(caseId, `Tambahkan "${product}" ke cart, lalu buka halaman Cart`);
 
     const isEmptyBefore = await CartPage.isEmpty();
     rt.verify(caseId, 'Cart tidak kosong sebelum item dihapus', 'false', String(isEmptyBefore));
@@ -106,12 +110,12 @@ async function main() {
     rt.startCase(caseId, 'TS003/TC003', 'Menambah jumlah (qty) produk di keranjang');
     await resetCart(caseId);
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(product);
     await ProductDetailPage.increaseQuantity(updateQtyIncreaseData.initialQty - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await ProductDetailPage.addToCart();
     await ProductDetailPage.openCart();
-    await rt.captureStep(caseId, `Tambahkan "${cartProduct}" qty ${updateQtyIncreaseData.initialQty} ke cart`);
+    await rt.captureStep(caseId, `Tambahkan "${product}" qty ${updateQtyIncreaseData.initialQty} ke cart`);
 
     const initialQty = await CartPage.getItemQuantity();
     rt.verify(caseId, 'Quantity awal di Cart', String(updateQtyIncreaseData.initialQty), initialQty);
@@ -133,12 +137,12 @@ async function main() {
     rt.startCase(caseId, 'TS003/TC004', 'Mengurangi jumlah (qty) produk di keranjang');
     await resetCart(caseId);
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(product);
     await ProductDetailPage.increaseQuantity(updateQtyDecreaseData.initialQty - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await ProductDetailPage.addToCart();
     await ProductDetailPage.openCart();
-    await rt.captureStep(caseId, `Tambahkan "${cartProduct}" qty ${updateQtyDecreaseData.initialQty} ke cart`);
+    await rt.captureStep(caseId, `Tambahkan "${product}" qty ${updateQtyDecreaseData.initialQty} ke cart`);
 
     const initialQty = await CartPage.getItemQuantity();
     rt.verify(caseId, 'Quantity awal di Cart', String(updateQtyDecreaseData.initialQty), initialQty);
@@ -160,7 +164,7 @@ async function main() {
     rt.startCase(caseId, 'TS003/TC005', 'Akumulasi total harga saat produk sama ditambahkan berkali-kali');
     await resetCart(caseId);
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(product);
     await ProductDetailPage.increaseQuantity(repeatedAddToCartData.quantityPerAdd - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await rt.captureStep(caseId, `Set quantity per Add to Cart menjadi ${repeatedAddToCartData.quantityPerAdd}`);

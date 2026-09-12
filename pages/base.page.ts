@@ -125,4 +125,33 @@ export default class BasePage {
     await gestures().tapAtRatio(xRatio, yRatio);
   }
 
+  // Klik tombol lanjut (CTA) pada form checkout (Address/Payment) yang barusan diisi banyak field.
+  //
+  // HANYA relevan di iOS: form ini TERBUKTI TIDAK SELALU menutup keyboard software sendiri setelah
+  // field terakhir diisi - perilakunya flaky (diverifikasi lewat run berulang di device yang sama:
+  // kadang keyboard langsung hilang, kadang tetap terbuka dan menutupi CTA-nya sepenuhnya). Tap ke
+  // elemen netral (judul layar "Checkout", lewat `dismissBySelector`) terbukti selalu berhasil
+  // menutup keyboard kalau memang masih terbuka - dicoba ulang sampai CTA benar-benar `displayed`,
+  // BUKAN delay tetap, supaya tidak menambah waktu di kondisi normal (keyboard sudah tertutup) dan
+  // tetap andal di kondisi flaky (keyboard masih terbuka). Android tidak pernah butuh percobaan
+  // ulang - CTA-nya langsung `displayed` di percobaan pertama sehingga loop berhenti seketika.
+  protected async clickCheckoutCta(
+    ctaSelector: PlatformSelector,
+    dismissBySelector: PlatformSelector,
+    maxAttempts = 5,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const cta = await $(this.platformLocator(ctaSelector));
+      if (await cta.isDisplayed().catch(() => false)) {
+        await cta.click();
+        return;
+      }
+      if (driver.isIOS) {
+        await this.click(dismissBySelector);
+      }
+    }
+    // Percobaan terakhir: biarkan click() melempar error "tidak displayed" yang jelas, bukan gagal senyap.
+    await this.click(ctaSelector);
+  }
+
 }

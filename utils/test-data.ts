@@ -80,21 +80,41 @@ export const baseProducts = [
   'Test.allTheThings() T-Shirt',
 ];
 
-// Produk untuk skenario Detail Produk (TC002) & Review Produk (TC004)
-export const detailProduct = 'Sauce Labs Backpack';
+// Produk untuk skenario Detail Produk (TC002) & Review Produk (TC004).
+// BERBEDA per platform - bukan beda locator, tapi beda ISI KATALOG-nya. Diverifikasi lewat scroll
+// penuh katalog di device: app Android punya entri "Sauce Labs Backpack" polos (tanpa varian warna)
+// sebagai salah satu dari 22 kartu, sedangkan app iOS TIDAK PERNAH punya entri polos untuk produk yang
+// punya varian warna - satu-satunya bentuk yang ada di 25 kartu katalog iOS adalah yang sudah disuffix
+// warna (mis. "Sauce Labs Backpack - Black", "- Green", dst). Dipilih lewat platformText() supaya
+// openProduct() di TC002 benar-benar menemukan elemen yang ada di device, bukan mencari nama yang
+// tidak pernah dirender.
+export const detailProduct = {
+  android: 'Sauce Labs Backpack',
+  ios: 'Sauce Labs Backpack - Black',
+} satisfies PlatformText;
 export const reviewRatingStars = 4 as const;
 
 // ===================== TS003 - Cart =====================
 
-// CATATAN PENTING: Excel memakai produk "Onesie" (TC001) dan "Sauce Labs Bike Light" (TC005), tapi
-// hasil investigasi langsung di device menemukan bug crash asli di app: HANYA "Sauce Labs Backpack"
-// beserta varian warnanya (index 0-5 di grid katalog) yang bisa dibuka tanpa crash. Produk apapun
-// setelah itu (Bike Light, Bolt T-Shirt, Fleece Jacket, Onesie, Test.allTheThings(), dst) membuat app
-// crash saat diklik (java.lang.ArrayIndexOutOfBoundsException / NullPointerException di
-// ProductCatalogFragment.java:156, diverifikasi lewat adb logcat, konsisten di berbagai skenario).
-// Karena ini bug di app (bukan di test), seluruh skenario Cart memakai "Sauce Labs Backpack" sebagai
-// pengganti.
-export const cartProduct = 'Sauce Labs Backpack';
+// CATATAN PENTING (Android): Excel memakai produk "Onesie" (TC001) dan "Sauce Labs Bike Light"
+// (TC005), tapi hasil investigasi langsung di device menemukan bug crash asli di app ANDROID: HANYA
+// "Sauce Labs Backpack" beserta varian warnanya (index 0-5 di grid katalog) yang bisa dibuka tanpa
+// crash. Produk apapun setelah itu (Bike Light, Bolt T-Shirt, Fleece Jacket, Onesie,
+// Test.allTheThings(), dst) membuat app crash saat diklik (java.lang.ArrayIndexOutOfBoundsException /
+// NullPointerException di ProductCatalogFragment.java:156, diverifikasi lewat adb logcat, konsisten di
+// berbagai skenario). Karena ini bug di app (bukan di test), seluruh skenario Cart memakai
+// "Sauce Labs Backpack" sebagai pengganti.
+//
+// BERBEDA per platform - sama seperti `detailProduct` di atas: app iOS tidak punya entri katalog
+// "Sauce Labs Backpack" polos, cuma varian warna. Dipilih lewat platformText().
+export const cartProduct = {
+  android: 'Sauce Labs Backpack',
+  ios: 'Sauce Labs Backpack - Black',
+} satisfies PlatformText;
+// Warna yang dipilih lewat swatch di halaman Detail Produk sebelum Add to Cart (TC001) - SELALU wajib
+// dipilih eksplisit di iOS: diverifikasi warna default produk yang masuk cart di iOS selalu "Green"
+// kalau swatch tidak di-tap sama sekali, terlepas dari nama/warna kartu katalog yang dibuka. Lihat
+// catatan lengkap di locators/cart.locators.ts.
 export const cartProductColor = 'Black';
 
 export const addProductData = {
@@ -118,8 +138,13 @@ export const repeatedAddToCartData = {
 
 // ===================== TS004 - Checkout =====================
 
+// `name` berbeda per platform - alasan sama seperti `detailProduct`/`cartProduct` di atas: app iOS
+// tidak punya entri katalog "Sauce Labs Backpack" polos, cuma varian warna.
 export const checkoutProduct = {
-  name: 'Sauce Labs Backpack',
+  name: {
+    android: 'Sauce Labs Backpack',
+    ios: 'Sauce Labs Backpack - Black',
+  } satisfies PlatformText,
   quantity: 2,
 };
 

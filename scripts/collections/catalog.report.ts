@@ -41,11 +41,16 @@ async function main() {
     const caseId = 'TC002';
     rt.startCase(caseId, 'TS002/TC002', 'Melihat detail produk (nama, harga, warna, quantity)');
 
-    await CatalogPage.openProduct(detailProduct);
-    await rt.captureStep(caseId, `Buka halaman detail produk "${detailProduct}"`);
+    // detailProduct berbeda per platform (lihat catatan di utils/test-data.ts) - script ini memakai
+    // `client` dari webdriverio remote() langsung, bukan global `driver` milik runner WDIO, jadi
+    // diresolusi manual di sini alih-alih lewat platformText().
+    const product = client.isIOS ? detailProduct.ios : detailProduct.android;
+
+    await CatalogPage.openProduct(product);
+    await rt.captureStep(caseId, `Buka halaman detail produk "${product}"`);
 
     const title = await ProductDetailPage.getTitle();
-    rt.verify(caseId, 'Judul produk di halaman detail', detailProduct, title);
+    rt.verify(caseId, 'Judul produk di halaman detail', product, title);
     const price = parsePrice(await ProductDetailPage.getPrice());
     rt.verify(caseId, `Harga produk > 0 (actual ${fmt(price)})`, 'true', String(price > 0));
     const qty = await ProductDetailPage.getQuantity();

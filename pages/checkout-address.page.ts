@@ -24,7 +24,7 @@ class CheckoutAddressPage extends BasePage {
   }
 
   async toPayment(): Promise<void> {
-    await this.click(CheckoutAddressLocators.toPaymentButton);
+    await this.clickCheckoutCta(CheckoutAddressLocators.toPaymentButton, CheckoutAddressLocators.formTitle);
   }
 }
 

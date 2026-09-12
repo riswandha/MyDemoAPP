@@ -18,7 +18,7 @@ class CheckoutPaymentPage extends BasePage {
   }
 
   async reviewOrder(): Promise<void> {
-    await this.click(CheckoutPaymentLocators.reviewOrderButton);
+    await this.clickCheckoutCta(CheckoutPaymentLocators.reviewOrderButton, CheckoutPaymentLocators.formTitle);
   }
 }
 

@@ -30,27 +30,26 @@ export async function getCurrentPackage(): Promise<string> {
   return driver.getCurrentPackage();
 }
 
-// Tunggu sampai package tertentu benar-benar berada di foreground. Berbasis kondisi (polling status
-// device), BUKAN delay tetap: cold start app berbeda-beda per device/API level, jadi angka pause
-// tetap selalu salah - kependekan di device lambat, buang waktu di device cepat.
-// Melempar error dengan pesan jelas bila melewati timeout, menyertakan package yang justru aktif
-// saat itu supaya kegagalan langsung bisa didiagnosis dari pesannya (mis. app crash ke launcher).
-export async function waitForAppInForeground(appPackage: string, timeout = 30000): Promise<void> {
-  // Pesan error dirakit di catch, bukan lewat opsi `timeoutMsg`: string timeoutMsg dievaluasi saat
-  // waitUntil DIPANGGIL, jadi nilai package terakhir belum terisi kalau ditaruh di sana.
-  let lastSeenPackage = '';
+// Appium APP_STATE: 4 = running in foreground. Berbeda dari getCurrentPackage(), queryAppState()
+// didukung UiAutomator2 MAUPUN XCUITest (menerima package name atau bundle id sebagai `id`), jadi ini
+// pengecekan foreground yang lintas platform - dipakai di waitForAppInForeground().
+const APP_STATE_RUNNING_IN_FOREGROUND = 4;
+
+export async function isAppInForeground(id: string): Promise<boolean> {
+  const state = await driver.queryAppState(id);
+  return state === APP_STATE_RUNNING_IN_FOREGROUND;
+}
+
+// Tunggu sampai app dengan identitas (package/bundle id) tertentu benar-benar berada di foreground.
+// Berbasis kondisi (polling status device), BUKAN delay tetap: cold start app berbeda-beda per
+// device/API level, jadi angka pause tetap selalu salah - kependekan di device lambat, buang waktu
+// di device cepat.
+export async function waitForAppInForeground(id: string, timeout = 30000): Promise<void> {
   try {
-    await driver.waitUntil(
-      async () => {
-        lastSeenPackage = await getCurrentPackage();
-        return lastSeenPackage === appPackage;
-      },
-      { timeout, interval: 500 },
-    );
+    await driver.waitUntil(async () => isAppInForeground(id), { timeout, interval: 500 });
   } catch (err) {
     throw new Error(
-      `App "${appPackage}" tidak berada di foreground dalam ${timeout} ms ` +
-        `(package aktif terakhir: "${lastSeenPackage}"). Penyebab: ${(err as Error).message}`,
+      `App "${id}" tidak berada di foreground dalam ${timeout} ms. Penyebab: ${(err as Error).message}`,
     );
   }
 }

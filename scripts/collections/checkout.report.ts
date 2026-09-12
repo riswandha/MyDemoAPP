@@ -22,6 +22,12 @@ function closeEnough(a: number, b: number, tolerance = 0.01): boolean {
   return Math.abs(a - b) <= tolerance;
 }
 
+// Format badge jumlah item di Review Order berbeda per platform - lihat catatan lengkap di
+// tests/checkout/checkout.spec.ts (expectedItemsCountText).
+function expectedItemsCountText(isIOS: boolean, quantity: number): string {
+  return isIOS ? `${quantity}item` : `${quantity} Items`;
+}
+
 function verifyMoney(
   rt: { verify: (caseId: string, item: string, expected: string, actual: string) => void },
   caseId: string,
@@ -43,6 +49,9 @@ async function main() {
   {
     const caseId = 'TC001';
     rt.startCase(caseId, 'TS004/TC001', 'Checkout & place order lengkap dengan verifikasi harga di tiap halaman');
+    // checkoutProduct.name berbeda per platform (lihat catatan di utils/test-data.ts) - script ini
+    // memakai `rt.client` dari webdriverio remote() langsung, bukan global `driver` milik runner WDIO.
+    const productName = rt.client.isIOS ? checkoutProduct.name.ios : checkoutProduct.name.android;
 
     await LoginPage.login(validUser.username, validUser.password);
     await rt.client.pause(4000);
@@ -53,10 +62,10 @@ async function main() {
     await CartPage.goShopping();
     await rt.captureStep(caseId, 'Pastikan cart kosong sebelum mulai belanja');
 
-    await CatalogPage.openProduct(checkoutProduct.name);
-    await rt.captureStep(caseId, `Buka halaman detail produk "${checkoutProduct.name}"`);
+    await CatalogPage.openProduct(productName);
+    await rt.captureStep(caseId, `Buka halaman detail produk "${productName}"`);
     const productTitle = await ProductDetailPage.getTitle();
-    rt.verify(caseId, 'Product Detail - Judul produk', checkoutProduct.name, productTitle);
+    rt.verify(caseId, 'Product Detail - Judul produk', productName, productTitle);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
 
     await ProductDetailPage.increaseQuantity(checkoutProduct.quantity - 1);
@@ -70,7 +79,7 @@ async function main() {
     await ProductDetailPage.openCart();
     await rt.captureStep(caseId, 'Buka halaman Cart');
     const cartItemTitle = await CartPage.getItemTitle();
-    rt.verify(caseId, 'Cart - Judul item', checkoutProduct.name, cartItemTitle);
+    rt.verify(caseId, 'Cart - Judul item', productName, cartItemTitle);
     const cartUnitPrice = parsePrice(await CartPage.getItemPrice());
     verifyMoney(rt, caseId, 'Cart - Harga satuan (vs Product Detail)', unitPrice, cartUnitPrice);
     const cartQty = await CartPage.getItemQuantity();
@@ -99,11 +108,16 @@ async function main() {
     await CheckoutPaymentPage.reviewOrder();
     await rt.captureStep(caseId, 'Lanjut ke Checkout Step 3 (Review Order)');
     const reviewTitle = await CheckoutOverviewPage.getItemTitle();
-    rt.verify(caseId, 'Review Order - Judul item', checkoutProduct.name, reviewTitle);
+    rt.verify(caseId, 'Review Order - Judul item', productName, reviewTitle);
     const reviewUnitPrice = parsePrice(await CheckoutOverviewPage.getItemPrice());
     verifyMoney(rt, caseId, 'Review Order - Harga satuan (vs Cart)', unitPrice, reviewUnitPrice);
     const reviewItemsCount = await CheckoutOverviewPage.getItemsCount();
-    rt.verify(caseId, 'Review Order - Jumlah item', `${checkoutProduct.quantity} Items`, reviewItemsCount);
+    rt.verify(
+      caseId,
+      'Review Order - Jumlah item',
+      expectedItemsCountText(rt.client.isIOS, checkoutProduct.quantity),
+      reviewItemsCount
+    );
     const reviewTotal = parsePrice(await CheckoutOverviewPage.getTotalAmount());
     verifyMoney(
       rt,
@@ -125,6 +139,7 @@ async function main() {
   {
     const caseId = 'TC002';
     rt.startCase(caseId, 'TS004/TC002', 'Ringkasan Review Order sesuai dengan data yang dipilih di Cart');
+    const productName = rt.client.isIOS ? checkoutProduct.name.ios : checkoutProduct.name.android;
 
     await LoginPage.login(validUser.username, validUser.password);
     await rt.client.pause(4000);
@@ -135,11 +150,11 @@ async function main() {
     await CartPage.goShopping();
     await rt.captureStep(caseId, 'Pastikan cart kosong sebelum mulai belanja');
 
-    await CatalogPage.openProduct(checkoutProduct.name);
+    await CatalogPage.openProduct(productName);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await ProductDetailPage.increaseQuantity(checkoutProduct.quantity - 1);
     await ProductDetailPage.addToCart();
-    await rt.captureStep(caseId, `Buka "${checkoutProduct.name}", set quantity ${checkoutProduct.quantity}, Add to Cart`);
+    await rt.captureStep(caseId, `Buka "${productName}", set quantity ${checkoutProduct.quantity}, Add to Cart`);
 
     await ProductDetailPage.openCart();
     const cartTitle = await CartPage.getItemTitle();
@@ -161,7 +176,12 @@ async function main() {
     const reviewUnitPrice = parsePrice(await CheckoutOverviewPage.getItemPrice());
     verifyMoney(rt, caseId, 'Review Order - Harga satuan (vs Product Detail)', unitPrice, reviewUnitPrice);
     const reviewItemsCount = await CheckoutOverviewPage.getItemsCount();
-    rt.verify(caseId, 'Review Order - Jumlah item (vs Cart)', `${cartQty} Items`, reviewItemsCount);
+    rt.verify(
+      caseId,
+      'Review Order - Jumlah item (vs Cart)',
+      expectedItemsCountText(rt.client.isIOS, Number(cartQty)),
+      reviewItemsCount
+    );
     const reviewTotal = parsePrice(await CheckoutOverviewPage.getTotalAmount());
     verifyMoney(
       rt,
