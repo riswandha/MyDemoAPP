@@ -1,8 +1,31 @@
 // Helper level-device/app (bukan interaksi elemen). Membungkus command Appium yang menyangkut siklus
 // hidup aplikasi & status device, supaya page object/hook tidak memanggil `driver` mentah tersebar.
+//
+// File ini juga memegang SATU-SATUNYA percabangan platform untuk urusan IDENTITAS & SIKLUS HIDUP app
+// (lihat appId()). Percabangan platform di project ini total ada tiga, dibagi menurut jenis
+// perbedaannya - semuanya terpusat, tidak tersebar:
+//   - beda SELECTOR elemen      -> resolvePlatformSelector() di locators/types.ts
+//   - beda COMMAND gesture      -> gestures() di utils/gesture-helper.ts
+//   - beda IDENTITAS/lifecycle  -> appId() di file ini
+//   - beda TEKS/data harapan    -> platformText() di utils/test-data.ts
+// Di luar itu ada satu pengecualian yang disengaja: fitur Login punya ALUR langkah yang berbeda antar
+// platform (bukan sekadar elemen/command yang berbeda), dan itu ditangani lewat kontrak LoginFlow di
+// pages/login.page.ts - juga dengan satu titik percabangan, bukan if/else yang tersebar.
+
+import { env } from './env';
+
+// Identitas app yang dipakai Appium untuk terminate/activate. Android memakai package name
+// (com.saucelabs.mydemoapp.android), iOS memakai bundle id (com.saucelabs.mydemo.app.ios) - dua
+// skema penamaan yang berbeda, jadi tidak bisa dipakai satu nilai untuk keduanya.
+export function appId(): string {
+  return driver.isIOS ? env.ios.bundleId : env.appPackage;
+}
 
 // Package aplikasi yang sedang di foreground saat ini (dipakai mis. untuk memverifikasi app berpindah
 // ke browser eksternal pada skenario About).
+//
+// KHUSUS ANDROID: driver.getCurrentPackage() adalah command UiAutomator2; XCUITest tidak punya
+// padanannya. Pemanggilnya (skenario About di menu.page.ts) karena itu belum punya versi iOS.
 export async function getCurrentPackage(): Promise<string> {
   return driver.getCurrentPackage();
 }
@@ -36,7 +59,8 @@ export async function waitForAppInForeground(appPackage: string, timeout = 30000
 // autoLaunch bawaan Appium kadang tidak konsisten membawa app ke foreground di device fisik, dan
 // terminate->activate memastikan navigasi selalu reset ke layar awal tiap sesi/spec (bukan lanjut
 // dari layar terakhir sesi sebelumnya). Data app (login, cart) tetap dipertahankan karena noReset.
-export async function restartAppToInitialState(appPackage: string): Promise<void> {
-  await driver.terminateApp(appPackage);
-  await driver.activateApp(appPackage);
+export async function restartAppToInitialState(): Promise<void> {
+  const id = appId();
+  await driver.terminateApp(id);
+  await driver.activateApp(id);
 }

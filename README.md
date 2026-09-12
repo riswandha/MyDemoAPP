@@ -8,7 +8,7 @@ Status platform saat ini:
 | Platform | Status |
 |---|---|
 | Android | Jalan penuh (UiAutomator2), lokal & CI |
-| iOS | Kerangka siap (config + slot locator), **belum runnable** — lihat [Status iOS](#status-ios) |
+| iOS | Suite **Login** jalan penuh (XCUITest, simulator). Fitur lain masih menunggu inspeksi locator — lihat [Status iOS](#status-ios) |
 
 ## Prasyarat
 
@@ -70,7 +70,7 @@ menjalankan semuanya paralel. Satu device → tetap sequential seperti biasa.
 config/
   wdio.shared.conf.ts       # base config: specs, suites, retry, timeout, service, reporter, hook
   wdio.android.conf.ts      # extend base + capabilities UiAutomator2 (multi-device dari env)
-  wdio.ios.conf.ts          # extend base + capabilities XCUITest (belum runnable)
+  wdio.ios.conf.ts          # extend base + capabilities XCUITest
 tests/<fitur>/*.spec.ts     # test case, dikelompokkan per FITUR (login, catalog, cart, checkout, menu, smoke)
 pages/
   base.page.ts              # utilitas bersama: platformLocator, wait, gesture (swipe/scroll/tap)
@@ -100,14 +100,57 @@ script laporan). Jadi mengganti platform = mengganti file config, bukan mengubah
 
 ### Status iOS
 
-`npm run test:ios` **belum bisa dijalankan**. Yang masih kurang:
+Suite **`login` sudah jalan penuh di iOS** (terverifikasi di simulator iPhone 17 Pro / iOS 26.5).
+Fitur lain (`catalog`, `cart`, `checkout`, `menu`) masih Android-only: slot `ios` di file
+`locators/`-nya masih penanda `TODO(ios)` — sengaja dikosongkan, bukan ditebak, karena selector wajib
+berasal dari inspeksi device nyata. Bila dipaksa run di iOS, `resolvePlatformSelector()` melempar
+error yang jelas alih-alih gagal senyap.
 
-1. Slot `ios` di seluruh file `locators/` masih penanda `TODO(ios)` — sengaja dikosongkan, bukan
-   ditebak, karena selector wajib berasal dari inspeksi device nyata. Bila dipaksa run di iOS,
-   `resolvePlatformSelector()` melempar error yang jelas alih-alih gagal senyap.
-2. Driver `appium-xcuitest-driver` belum ditambahkan ke dependencies.
-3. Build `.app`/`.ipa` dan variabel env iOS (`IOS_DEVICE_NAME`, `IOS_PLATFORM_VERSION`, `IOS_UDID`,
-   `IOS_BUNDLE_ID`) belum diisi.
+#### Menjalankan suite login di iOS
+
+```bash
+APPIUM_HOME="$PWD/.appium" npx appium driver install xcuitest@9.10.5
+```
+
+Driver dipatok di seri 9.x karena XCUITest 12.x mensyaratkan Appium 3, sedangkan project ini memakai
+Appium 2. Pastikan driver terpasang di `APPIUM_HOME` project (folder `.appium/`), bukan hanya di
+`APPIUM_HOME` global mesin.
+
+```bash
+xcrun simctl shutdown all
+npm run test:ios:login
+```
+
+`simctl shutdown all` bukan formalitas: pengisian form di iOS dikirim sebagai input keyboard FISIK
+(lihat di bawah), dan capability `appium:connectHardwareKeyboard` hanya diterapkan bila Appium
+sendiri yang mem-boot simulatornya. Kalau simulator sudah terlanjur berjalan, Appium memakainya apa
+adanya dan pengetikan bisa gagal. Di CI hal ini terjadi sendirinya karena simulator selalu mulai dari
+keadaan mati.
+
+Isi `IOS_DEVICE_NAME`, `IOS_PLATFORM_VERSION`, dan `IOS_UDID` di `.env` sesuai simulator yang dipakai
+(`xcrun simctl list devices`). `IOS_BUNDLE_ID` sudah berisi default app-nya.
+
+#### Tiga hal yang bikin iOS berbeda dari Android di fitur ini
+
+Ketiganya perbedaan perilaku app/OS, bukan sekadar beda locator, dan semuanya diverifikasi langsung
+di simulator:
+
+1. **Keyboard tidak bisa ditutup.** App ini tidak melepas fokus field dengan cara apa pun yang bisa
+   dipicu dari Appium, sehingga keyboard software menetap dan menutupi tombol submit. Karena itu
+   `BasePage.setValue()` di iOS mengetik sebagai input keyboard fisik (`mobile: keys`) — iOS otomatis
+   menyingkirkan keyboard software begitu input datang dari sana. Daftar lengkap cara yang sudah
+   dicoba dan gagal ada di `utils/gesture-helper.ts`.
+2. **Dialog sistem "Save Password?"** muncul setelah login berhasil. Dialog ini milik sistem, tidak
+   terlihat di page source app, tapi membuat seluruh elemen app terbaca `visible=false`. Ditutup
+   otomatis lewat `SystemDialogPage.dismissIosSavePasswordDialog()` — bukan lewat `autoDismissAlerts`,
+   karena capability itu juga akan menutup alert validasi app yang justru harus dibaca test.
+3. **Skenario locked out tidak ada di iOS.** App iOS tidak punya akun locked out sama sekali (keempat
+   akun pada daftar username tersimpan semuanya berhasil login, dan tidak ada string bertema "locked"
+   di binary-nya) — app-nya bahkan menerima kredensial ngawur. Skenarionya karena itu ditandai
+   `@android-only` dan otomatis di-skip saat run iOS.
+
+Teks pesan error "password kosong" juga berbeda (Android `Enter Password`, iOS `Password is
+required`); nilai harapannya dipilih per platform lewat `platformText()` di `utils/test-data.ts`.
 
 ## Laporan
 
@@ -166,7 +209,8 @@ KVM diaktifkan, dan animasi emulator dimatikan. Laporan diunggah sebagai artifac
 | Command | Fungsi |
 |---|---|
 | `npm test` / `npm run test:android` | Menjalankan seluruh test Android (`config/wdio.android.conf.ts`) |
-| `npm run test:ios` | Menjalankan test iOS (`config/wdio.ios.conf.ts`) — belum runnable, lihat Status iOS |
+| `npm run test:ios` | Menjalankan test iOS (`config/wdio.ios.conf.ts`) — sejauh ini baru suite `login` yang siap |
+| `npm run test:ios:<suite>` | Menjalankan satu suite di iOS: `login`, `catalog`, `cart`, `checkout`, `menu`, `smoke` |
 | `npm run test:<suite>` | Menjalankan satu suite saja: `login`, `catalog`, `cart`, `checkout`, `menu`, `smoke` |
 | `npm run typecheck` | Cek tipe TypeScript tanpa emit (dipakai juga sebagai gate cepat di CI) |
 | `npm run appium` | Menjalankan Appium server manual (opsional — run test sudah auto-start server) |

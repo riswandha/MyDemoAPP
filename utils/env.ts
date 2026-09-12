@@ -9,6 +9,9 @@ dotenv.config();
 // Package aplikasi "My Demo App" (Sauce Labs) - default dipakai bila APP_PACKAGE tidak diisi di .env.
 export const APP_PACKAGE_DEFAULT = 'com.saucelabs.mydemoapp.android';
 
+// Bundle id aplikasi "My Demo App" versi iOS - padanan APP_PACKAGE_DEFAULT di Android.
+export const IOS_BUNDLE_ID_DEFAULT = 'com.saucelabs.mydemo.app.ios';
+
 // Daftar device Android yang dipakai. Bisa lebih dari satu (dipisah koma) untuk run PARALEL di
 // beberapa device sekaligus demi menghemat waktu - mis. ANDROID_DEVICES=emulator-5554,emulator-5556.
 // Serial device asli TIDAK PERNAH ditulis di sini, hanya di .env lokal masing-masing (gitignored).
@@ -38,10 +41,14 @@ export const env = {
     platformVersion: process.env.PLATFORM_VERSION || process.env.ANDROID_PLATFORM_VERSION || '13',
   },
 
-  // ----- iOS (disiapkan untuk cross-platform; diisi saat device iOS tersedia) -----
+  // ----- iOS -----
+  // bundleId adalah padanan appPackage di Android: identitas app yang dipakai Appium untuk
+  // terminate/activate. Nilainya berbeda dari pola package Android (bukan ...mydemoapp.ios),
+  // diverifikasi langsung lewat `xcrun simctl listapps` di simulator.
   ios: {
-    deviceName: process.env.IOS_DEVICE_NAME || 'iPhone 15',
-    platformVersion: process.env.IOS_PLATFORM_VERSION || '17',
+    deviceName: process.env.IOS_DEVICE_NAME || 'iPhone 17 Pro',
+    platformVersion: process.env.IOS_PLATFORM_VERSION || '26.5',
     udid: process.env.IOS_UDID,
+    bundleId: process.env.IOS_BUNDLE_ID || IOS_BUNDLE_ID_DEFAULT,
   },
 };

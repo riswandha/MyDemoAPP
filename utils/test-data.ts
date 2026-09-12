@@ -33,6 +33,40 @@ export const invalidUser = {
   password: 'wrongpass',
 };
 
+// ----- Pesan error login -----
+//
+// Beberapa nilai di sini BERBEDA antar platform karena app-nya memang menampilkan teks yang berbeda,
+// bukan karena locator-nya berbeda. Perbedaan jenis ini tidak tertolong oleh platformLocator(), jadi
+// dipilih lewat platformText() di bawah - satu-satunya titik percabangan platform untuk TEST DATA,
+// sejajar dengan tiga titik lain yang sudah ada (locator, gesture, identitas app).
+export interface PlatformText {
+  android: string;
+  ios: string;
+}
+
+export function platformText(text: PlatformText): string {
+  return driver.isIOS ? text.ios : text.android;
+}
+
+export const loginErrors = {
+  // Sama persis di kedua platform (terverifikasi di device).
+  usernameRequired: 'Username is required',
+
+  // BERBEDA. Excel menulis "Password is required"; itu yang dipakai app iOS, sedangkan app Android
+  // menampilkan "Enter Password". Acuan tiap platform = teks app-nya masing-masing supaya test benar
+  // terhadap perilaku nyata, dan selisih penulisan di Android dicatat sebagai temuan.
+  passwordRequired: {
+    android: 'Enter Password',
+    ios: 'Password is required',
+  } satisfies PlatformText,
+
+  // Hanya ada di Android. App iOS tidak punya akun locked out sama sekali - diverifikasi dua arah:
+  // keempat akun pada daftar username tersimpan semuanya berhasil login, dan tidak ada satu pun string
+  // bertema "locked" di dalam binary app iOS. Skenarionya karena itu ditandai @android-only.
+  // Teks di bawah tanpa koma, mengikuti teks app yang sebenarnya (Excel menulisnya dengan koma).
+  lockedOut: 'Sorry this user has been locked out.',
+};
+
 // ===================== TS002 - Katalog =====================
 
 // Nama produk memakai nama lengkap persis seperti yang tampil di app (hasil inspeksi di device) -

@@ -1,6 +1,5 @@
 import { restartAppToInitialState } from '../utils/device-helper';
 import SystemDialogPage from '../pages/system-dialog.page';
-import { env } from '../utils/env';
 
 // Fixture/helper hook WebdriverIO yang dipakai config di lifecycle test, dipisah dari file config
 // supaya config tetap ramping dan logika setup/teardown bisa dipakai ulang lintas platform
@@ -15,10 +14,12 @@ import { env } from '../utils/env';
 // 31244157054. Dicek per sesi (tiap spec file punya sesi sendiri) karena dialog itu bisa muncul
 // kapan saja di tengah job, bukan hanya di awal.
 export async function resetAppBeforeSession(): Promise<void> {
-  if (await SystemDialogPage.dismissAnrDialog()) {
+  // Dialog ANR adalah konsep Android; iOS tidak punya padanannya, jadi pengecekannya dilewati di iOS
+  // alih-alih dipaksakan (locator-nya pun NOT_APPLICABLE di iOS dan akan melempar error kalau dipakai).
+  if (!driver.isIOS && (await SystemDialogPage.dismissAnrDialog())) {
     console.log('Dialog ANR sistem terdeteksi dan ditutup sebelum sesi dimulai.');
   }
-  await restartAppToInitialState(env.appPackage);
+  await restartAppToInitialState();
 }
 
 // Dijalankan di hook `afterTest`: ambil screenshot hanya saat test gagal, untuk keperluan debugging.
