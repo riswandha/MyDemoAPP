@@ -21,18 +21,12 @@ export function appId(): string {
   return driver.isIOS ? env.ios.bundleId : env.appPackage;
 }
 
-// Package aplikasi yang sedang di foreground saat ini (dipakai mis. untuk memverifikasi app berpindah
-// ke browser eksternal pada skenario About).
-//
-// KHUSUS ANDROID: driver.getCurrentPackage() adalah command UiAutomator2; XCUITest tidak punya
-// padanannya. Pemanggilnya (skenario About di menu.page.ts) karena itu belum punya versi iOS.
-export async function getCurrentPackage(): Promise<string> {
-  return driver.getCurrentPackage();
-}
-
-// Appium APP_STATE: 4 = running in foreground. Berbeda dari getCurrentPackage(), queryAppState()
-// didukung UiAutomator2 MAUPUN XCUITest (menerima package name atau bundle id sebagai `id`), jadi ini
-// pengecekan foreground yang lintas platform - dipakai di waitForAppInForeground().
+// Appium APP_STATE: 4 = running in foreground. queryAppState() didukung UiAutomator2 MAUPUN XCUITest
+// (menerima package name atau bundle id sebagai `id`), jadi ini pengecekan foreground yang lintas
+// platform - dipakai di waitForAppInForeground() DAN di skenario About/buka browser eksternal
+// (menu.page.ts) untuk mendeteksi app berpindah ke background di Android. `driver.getCurrentPackage()`
+// (command khusus UiAutomator2, tidak ada padanannya di XCUITest) sempat dipakai untuk kebutuhan yang
+// sama sebelum queryAppState() ditemukan sebagai pengganti cross-platform-nya.
 const APP_STATE_RUNNING_IN_FOREGROUND = 4;
 
 export async function isAppInForeground(id: string): Promise<boolean> {

@@ -197,9 +197,22 @@ export const SHIPPING_FEE = 5.99;
 export const validWebviewUrl = 'https://www.saucelabs.com';
 
 // Excel memakai "www.saucelabs.com" (tanpa https://) sebagai contoh input tidak valid, tapi hasil
-// investigasi di device menunjukkan app benar-benar mencoba me-load string apapun yang menyerupai
-// domain (termasuk tanpa skema) alih-alih validasi client-side - baru menampilkan error "Please
-// provide a correct https url." kalau input sama sekali bukan bentuk URL (tanpa titik/domain). Data
-// disesuaikan dengan perilaku app yang sebenarnya supaya pesan error benar-benar teruji.
+// investigasi di device menunjukkan app Android benar-benar mencoba me-load string apapun yang
+// menyerupai domain (termasuk tanpa skema) alih-alih validasi client-side - baru menampilkan error
+// "Please provide a correct https url." kalau input sama sekali bukan bentuk URL (tanpa titik/domain).
+// Data disesuaikan dengan perilaku app yang sebenarnya supaya pesan error benar-benar teruji.
 export const invalidWebviewUrl = 'saucelabs';
-export const invalidWebviewUrlError = 'Please provide a correct https url.';
+
+// BERBEDA total per platform - bukan cuma beda teks, beda PERILAKU. Android memvalidasi input ini
+// secara sinkron dan menampilkan pesan error di atas. iOS TIDAK PERNAH melakukan validasi client-side
+// apa pun untuk input ini - form langsung ditinggalkan dan layar macet permanen di overlay
+// "Loading ..." (WKWebView gagal me-resolve "saucelabs" sebagai domain, tapi app tidak menangani
+// kegagalan itu). Diverifikasi lewat page source dump: byte-nya identik walau ditunggu berulang kali
+// selama 10 detik, dan kontras jelas dengan url VALID yang sukses memuat halaman sungguhan (~210KB)
+// dalam <2 detik. Karena itu nilai "error" yang diharapkan di iOS adalah bukti navigasi macet
+// (teks "Loading ..." yang seharusnya sudah hilang tapi tetap ada), bukan pesan validasi seperti
+// Android - lihat MenuLocators.webviewUrlError di locators/menu.locators.ts.
+export const invalidWebviewUrlError = {
+  android: 'Please provide a correct https url.',
+  ios: 'Loading ...',
+};

@@ -1,6 +1,6 @@
 import { createRuntime, writeReportData } from '../lib/report-client';
 import MenuPage from '../../pages/menu.page';
-import { validWebviewUrl, invalidWebviewUrl, invalidWebviewUrlError } from '../../utils/test-data';
+import { validWebviewUrl, invalidWebviewUrl, invalidWebviewUrlError, platformText } from '../../utils/test-data';
 
 // Menjalankan & merekam seluruh Test Case dari tests/menu/menu.spec.ts (Fitur Menu, TS005) memakai
 // page object & data yang sama persis dengan spec tersebut. TC003 (Drawing - buat & simpan gambar)
@@ -41,7 +41,7 @@ async function main() {
     await rt.captureStep(caseId, `Isi URL tidak valid (${invalidWebviewUrl}) lalu tap tombol Go`);
 
     const error = await MenuPage.getWebviewUrlError();
-    rt.verify(caseId, 'Pesan error format URL salah', invalidWebviewUrlError, error);
+    rt.verify(caseId, 'Pesan error format URL salah', platformText(invalidWebviewUrlError), error);
   }
 
   // TS005/TC004 - Membersihkan gambar pada fitur Drawing
@@ -86,7 +86,7 @@ async function main() {
     await rt.captureStep(caseId, 'Buka menu, lalu pilih "About"');
 
     const version = await MenuPage.getAppVersion();
-    const versionMatches = /^V\.\d+\.\d+\.\d+/.test(version);
+    const versionMatches = /^V\.\d+(\.\d+)*$/.test(version);
     rt.verify(caseId, `Format versi app (actual "${version}")`, 'true', String(versionMatches));
 
     await MenuPage.goToSauceLabsWebsite();

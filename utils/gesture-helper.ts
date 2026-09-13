@@ -47,6 +47,11 @@ export interface GestureStrategy {
   // menekan area di luarnya - bukan driver.back(), yang di device fisik bisa keluar dari activity.
   tapAtRatio(xRatio: number, yRatio: number): Promise<void>;
 
+  // Drag terkontrol dari satu titik ke titik lain (dipakai mis. membuat coretan di canvas Drawing).
+  // Command Appium-nya beda per platform, sama seperti scroll() - UiAutomator2 vs XCUITest tidak
+  // berbagi command drag yang sama.
+  drag(fromX: number, fromY: number, toX: number, toY: number): Promise<void>;
+
   // Isi sebuah field dengan teks.
   //
   // Terlihat seperti hal yang tidak perlu dibedakan per platform - toh WebdriverIO sudah punya
@@ -109,6 +114,10 @@ const androidGestures: GestureStrategy = {
   // menimpa isi field yang sudah ada (termasuk saat diisi string kosong, yang berarti mengosongkan).
   async typeText(element, value) {
     await element.setValue(value);
+  },
+
+  async drag(fromX, fromY, toX, toY) {
+    await driver.execute('mobile: dragGesture', { startX: fromX, startY: fromY, endX: toX, endY: toY, speed: 1000 });
   },
 };
 
@@ -200,6 +209,14 @@ const iosGestures: GestureStrategy = {
     // Field harus difokuskan dulu supaya hardware key mendarat di sana.
     await element.click();
     await driver.execute('mobile: keys', { keys: value.split('') });
+  },
+
+  // dragFromToForDuration dengan durasi pendek (0.5 detik) - cukup untuk membuat coretan (bukan
+  // tap tunggal), tanpa memicu inersia/fling seperti yang dihindari scroll() di atas.
+  async drag(fromX, fromY, toX, toY) {
+    await driver.execute('mobile: dragFromToForDuration', {
+      fromX, fromY, toX, toY, duration: 0.5,
+    });
   },
 };
 
