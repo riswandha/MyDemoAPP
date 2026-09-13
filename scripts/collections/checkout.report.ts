@@ -46,7 +46,7 @@ async function main() {
   const rt = await createRuntime('checkout');
 
   // TS004/TC001 - Checkout & place order lengkap, harga diverifikasi di tiap halaman
-  {
+  await rt.runCase('TC001', async () => {
     const caseId = 'TC001';
     rt.startCase(caseId, 'TS004/TC001', 'Checkout & place order lengkap dengan verifikasi harga di tiap halaman');
     // checkoutProduct.name berbeda per platform (lihat catatan di utils/test-data.ts) - script ini
@@ -133,10 +133,10 @@ async function main() {
     rt.verify(caseId, 'Halaman Checkout Complete tampil', 'true', String(isComplete));
     const completeTitle = await CheckoutCompletePage.getCompleteTitle();
     rt.verify(caseId, 'Judul halaman', 'Checkout Complete', completeTitle);
-  }
+  });
 
   // TS004/TC002 - Review Order summary sesuai data Cart
-  {
+  await rt.runCase('TC002', async () => {
     const caseId = 'TC002';
     rt.startCase(caseId, 'TS004/TC002', 'Ringkasan Review Order sesuai dengan data yang dipilih di Cart');
     const productName = rt.client.isIOS ? checkoutProduct.name.ios : checkoutProduct.name.android;
@@ -195,7 +195,7 @@ async function main() {
     await rt.captureStep(caseId, 'Place Order -> halaman Checkout Complete (cart dikosongkan kembali)');
     const isComplete = await CheckoutCompletePage.isCheckoutComplete();
     rt.verify(caseId, 'Halaman Checkout Complete tampil', 'true', String(isComplete));
-  }
+  });
 
   const data = await rt.finish();
   await writeReportData('checkout', data);

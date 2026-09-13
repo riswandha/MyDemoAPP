@@ -185,25 +185,76 @@ class IOSLoginFlow extends BasePage implements LoginFlow {
   //   - layar Catalog tampil                -> login berhasil tanpa dialog sistem (mis. sudah pernah
   //                                            dijawab), jadi loop tidak menggantung menunggu dialog
   //                                            yang tidak akan datang
+  //
+  // Tombol Login diklik LANGSUNG (find + click) - SENGAJA TIDAK lewat this.click()/waitForDisplayed()
+  // sebagai precondition. TEMUAN PENTING (diverifikasi berulang lewat page source + screenshot
+  // dibandingkan hasil command diagnostik): `element.isDisplayed()`/`waitForDisplayed()` BISA
+  // MEMBERI BACAAN FALSE-NEGATIF YANG TIDAK SINKRON DENGAN KONDISI VISUAL SEBENARNYA tepat di titik
+  // ini - screenshot yang diambil PERSIS bersamaan menunjukkan tombol tampil normal & bisa diklik,
+  // padahal `isDisplayed()` (dicoba berulang tiap 1 detik dengan lookup BARU, bukan referensi basi)
+  // tetap melaporkan `false` selama lebih dari 10 detik berturut-turut. Kejadian ini TIDAK KONSISTEN
+  // (kadang langsung `true`, kadang `false` lama) - race XCUITest yang sudah pernah ditemukan di
+  // command diagnostik lain (`mobile: isKeyboardShown` di fitur Checkout, lihat memory
+  // ios-login-lessons). Karena command diagnostik-nya sendiri yang tidak bisa dipercaya, solusinya
+  // BUKAN menunggu lebih lama, melainkan tidak menjadikannya precondition sama sekali - klik dicoba
+  // langsung, dan kalau elemen genuinely belum ada, findElement gagal CEPAT (skala milidetik, bukan
+  // ikut menunggu puluhan detik), sehingga retry loop submit() di bawah tetap bisa mencoba ulang
+  // dengan cepat.
+  //
+  // SELURUH proses (klik + tunggu hasil) diulang sampai 5x kalau perlu - bukan cuma klik tombolnya
+  // sekali. Ditemukan lewat pengujian berulang (kombinasi pause+screenshot XCUITest tepat sebelum
+  // tap, pola yang dipakai scripts/collections/*.report.ts untuk bukti visual per langkah): tap ke
+  // tombol bisa "berhasil" menurut Appium (tidak melempar error) tapi tidak benar-benar terdaftar
+  // oleh app - tidak ada alert validasi, dialog sistem, maupun layar Catalog yang muncul sama sekali,
+  // padahal field sudah terisi benar. Mengklik ULANG adalah remedi yang benar untuk tap yang diam-diam
+  // tidak terdaftar, bukan menunggu lebih lama untuk tap yang sama.
+  //
+  // TEMUAN TAMBAHAN: keyboard software TIDAK SELALU auto-dismiss sendiri tergantung field mana yang
+  // TERAKHIR benar-benar diketik. Mengetik ke field password (SecureTextField) sebagai aksi terakhir
+  // terbukti reliable menutup keyboard sendiri; TAPI kalau password dibiarkan kosong (skenario field
+  // password kosong - lihat utils/gesture-helper.ts, nilai kosong memang sengaja tidak dikirim sama
+  // sekali di iOS) dan username (TextField biasa) jadi aksi TERAKHIR yang benar-benar diketik,
+  // keyboard TIDAK SELALU ikut tertutup. Karena itu judul layar di-tap PROAKTIF di awal SETIAP
+  // percobaan (bukan cuma reaktif setelah klik tombol gagal) supaya keyboard dipastikan tertutup
+  // sebelum tombol Login dicoba, apa pun field mana yang terakhir diisi.
   async submit(): Promise<void> {
-    await this.click(LoginLocators.loginButton);
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await $(this.platformLocator(LoginLocators.loginScreenTitleText))
+        .click()
+        .catch(() => {});
 
-    await driver.waitUntil(
-      async () => {
-        if (await SystemDialogPage.dismissIosSavePasswordDialog()) {
-          return true;
-        }
-        return (
-          (await this.isDisplayed(LoginLocators.validationAlertTitle).catch(() => false)) ||
-          (await this.isDisplayed(LoginScreenMarkers.catalogScreen).catch(() => false))
+      try {
+        const button = await $(this.platformLocator(LoginLocators.loginButton));
+        await button.click();
+      } catch {
+        // Elemen genuinely belum ketemu - biarkan iterasi retry berikutnya coba lagi.
+      }
+
+      try {
+        await driver.waitUntil(
+          async () => {
+            if (await SystemDialogPage.dismissIosSavePasswordDialog()) {
+              return true;
+            }
+            return (
+              (await this.isDisplayed(LoginLocators.validationAlertTitle).catch(() => false)) ||
+              (await this.isDisplayed(LoginScreenMarkers.catalogScreen).catch(() => false))
+            );
+          },
+          {
+            timeout: 8000,
+            interval: 400,
+            timeoutMsg: 'Submit login tidak menghasilkan apa pun: layar Catalog, alert validasi, maupun dialog sistem tidak muncul.',
+          },
         );
-      },
-      {
-        timeout: 20000,
-        interval: 400,
-        timeoutMsg: 'Submit login tidak menghasilkan apa pun dalam 20 detik: layar Catalog, alert validasi, maupun dialog sistem tidak muncul.',
-      },
-    );
+        return;
+      } catch (err) {
+        if (attempt === maxAttempts) {
+          throw err;
+        }
+      }
+    }
   }
 
   // Sekali tap, tanpa dialog konfirmasi (terverifikasi di simulator). Tujuannya layar Login, jadi itu
@@ -288,6 +339,16 @@ class LoginPage extends BasePage {
   async login(username: string, password: string): Promise<void> {
     await this.flow.openLoginScreen();
     await this.flow.fillCredentials(username, password);
+    await this.flow.submit();
+  }
+
+  // Submit form Login yang SUDAH diisi (dipisah dari login() supaya pemanggil yang perlu screenshot
+  // per langkah - mis. scripts/collections/login.report.ts - bisa mengisi field & submit sebagai dua
+  // langkah terpisah, tanpa menduplikasi logic submit()). WAJIB dipakai alih-alih tap manual ke
+  // loginButton: di iOS, submit() inilah yang menunggu & menutup dialog sistem "Save Password?" -
+  // tap manual yang melewati method ini membuat isLoggedIn() sesudahnya race condition (dialog
+  // sistem belum tentu sempat ditutup sebelum isLoggedIn() membaca layar).
+  async submit(): Promise<void> {
     await this.flow.submit();
   }
 

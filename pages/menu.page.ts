@@ -38,7 +38,7 @@ class MenuPage extends BasePage {
   //     ke List), jadi tap back diulang (bukan sekali) SAMPAI item list "WebView" kelihatan lagi -
   //     itu satu-satunya sinyal yang benar-benar menandakan sudah di List More (tab bar SENDIRI tidak
   //     cukup: form URL juga masih menampilkan tab bar, cuma layar Konten yang menyembunyikannya).
-  //     Mirip pola retry-tolerant BasePage.clickCheckoutCta - tidak bergantung asumsi jumlah level
+  //     Mirip pola retry-tolerant BasePage.clickWithKeyboardDismissRetry - tidak bergantung asumsi jumlah level
   //     pasti.
   //
   //     KASUS KHUSUS - url invalid macet permanen di overlay "Loading ..." (lihat catatan

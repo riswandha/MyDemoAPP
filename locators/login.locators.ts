@@ -75,6 +75,15 @@ export const LoginLocators = {
     ios: "-ios predicate string:type == 'XCUIElementTypeButton' AND name == 'Login'",
   },
 
+  // HANYA iOS - judul layar ("Login", StaticText - BUKAN tombolnya, lihat catatan loginButton di
+  // atas). Dipakai sebagai target dismiss keyboard di BasePage.clickWithKeyboardDismissRetry():
+  // keyboard software TERBUKTI bisa flaky tidak menutup sendiri setelah field terakhir diisi, sama
+  // seperti pola yang sudah dikonfirmasi di form Checkout - lihat IOSLoginFlow.submit().
+  loginScreenTitleText: {
+    android: NOT_APPLICABLE,
+    ios: "-ios predicate string:type == 'XCUIElementTypeStaticText' AND name == 'Login'",
+  },
+
   // Pesan error validasi username ("Username is required").
   // Android: TextView inline di bawah field username.
   // iOS: baris pesan (StaticText ke-2) di dalam modal alert "Validation Error!" - StaticText ke-1

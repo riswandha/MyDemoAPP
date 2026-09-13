@@ -17,6 +17,7 @@
     "appium": "appium",
     "ci:summary": "ts-node scripts/ci-step-summary.ts",
     "report:capture": "ts-node scripts/run-multidevice-reports.ts",
+    "report:capture:ios": "ts-node scripts/run-ios-report.ts",
     "report:build": "ts-node scripts/build-collection-report.ts",
     "report:generate": "allure generate reports/allure-results --clean -o reports/allure-report",
     "report:open": "allure open reports/allure-report",

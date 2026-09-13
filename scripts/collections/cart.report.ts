@@ -57,7 +57,7 @@ async function main() {
   }
 
   // TS003/TC001 - Menambahkan produk ke keranjang
-  {
+  await rt.runCase('TC001', async () => {
     const caseId = 'TC001';
     rt.startCase(caseId, 'TS003/TC001', 'Menambahkan produk ke keranjang dengan warna & quantity tertentu');
     await resetCart(caseId);
@@ -81,10 +81,10 @@ async function main() {
     const totalPrice = parsePrice(await CartPage.getTotalPrice());
     const expectedTotal = unitPrice * addProductData.quantity;
     verifyMoney(rt, caseId, 'Subtotal Cart (harga satuan x quantity)', expectedTotal, totalPrice);
-  }
+  });
 
   // TS003/TC002 - Menghapus produk dari keranjang
-  {
+  await rt.runCase('TC002', async () => {
     const caseId = 'TC002';
     rt.startCase(caseId, 'TS003/TC002', 'Menghapus produk dari keranjang');
     await resetCart(caseId);
@@ -102,10 +102,10 @@ async function main() {
 
     const isEmptyAfter = await CartPage.isEmpty();
     rt.verify(caseId, 'Cart kosong setelah item dihapus', 'true', String(isEmptyAfter));
-  }
+  });
 
   // TS003/TC003 - Menambah jumlah (qty) produk di keranjang
-  {
+  await rt.runCase('TC003', async () => {
     const caseId = 'TC003';
     rt.startCase(caseId, 'TS003/TC003', 'Menambah jumlah (qty) produk di keranjang');
     await resetCart(caseId);
@@ -129,10 +129,10 @@ async function main() {
     const totalPrice = parsePrice(await CartPage.getTotalPrice());
     const expectedTotal = unitPrice * finalQty;
     verifyMoney(rt, caseId, 'Subtotal Cart setelah qty ditambah', expectedTotal, totalPrice);
-  }
+  });
 
   // TS003/TC004 - Mengurangi jumlah (qty) produk di keranjang
-  {
+  await rt.runCase('TC004', async () => {
     const caseId = 'TC004';
     rt.startCase(caseId, 'TS003/TC004', 'Mengurangi jumlah (qty) produk di keranjang');
     await resetCart(caseId);
@@ -156,10 +156,10 @@ async function main() {
     const totalPrice = parsePrice(await CartPage.getTotalPrice());
     const expectedTotal = unitPrice * finalQty;
     verifyMoney(rt, caseId, 'Subtotal Cart setelah qty dikurangi', expectedTotal, totalPrice);
-  }
+  });
 
   // TS003/TC005 - Menambahkan produk yang sama ke cart berkali-kali
-  {
+  await rt.runCase('TC005', async () => {
     const caseId = 'TC005';
     rt.startCase(caseId, 'TS003/TC005', 'Akumulasi total harga saat produk sama ditambahkan berkali-kali');
     await resetCart(caseId);
@@ -183,7 +183,7 @@ async function main() {
     const totalPrice = parsePrice(await CartPage.getTotalPrice());
     const expectedTotal = unitPrice * totalQty;
     verifyMoney(rt, caseId, 'Total harga terakumulasi', expectedTotal, totalPrice);
-  }
+  });
 
   const data = await rt.finish();
   await writeReportData('cart', data);
