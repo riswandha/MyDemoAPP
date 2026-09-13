@@ -59,7 +59,12 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      # `npm install` bukan `npm ci` - `appium-xcuitest-driver` membawa `sharp` (optionalDependency
+      # transitif lewat @appium/support) di versi berbeda dari copy yang dibawa `appium`, dan `npm ci`
+      # gagal dengan "Missing: @img/sharp-<platform> from lock file" secara tidak konsisten untuk
+      # SEMUA job di kedua workflow (Android & iOS) - lihat catatan lengkap di job `typecheck`
+      # android-tests.yml (diverifikasi ini bug npm dalam menulis lockfile, bukan lockfile yang rusak).
+      - run: npm install
 
       - run: npm run typecheck
 
@@ -118,7 +123,9 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      # `npm install` bukan `npm ci` - lihat catatan lengkap di job `typecheck` (atas) atau job
+      # `typecheck` android-tests.yml.
+      - run: npm install
 
       # Runner CI selalu bersih: app belum terpasang di simulator manapun, jadi APP_PATH WAJIB diisi
       # supaya Appium meng-install .app-nya (beda dari run lokal yang boleh mengosongkan APP_PATH bila
@@ -252,7 +259,8 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      # `npm install` bukan `npm ci` - lihat catatan lengkap di job `typecheck` android-tests.yml.
+      - run: npm install
 
       # Sama persis dengan step di job `test` - lihat komentar lengkap di sana.
       - name: Download app My Demo App (Simulator build)
