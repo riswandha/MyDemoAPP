@@ -14,6 +14,19 @@ import { env } from '../utils/env';
 export const config: WebdriverIO.Config = {
   ...sharedConfig,
 
+  // Override HANYA di iOS: connectionRetryTimeout bawaan (wdio.shared.conf.ts, 120000ms) adalah
+  // timeout SISI KLIEN untuk satu request WebDriver - jauh lebih pendek dari wdaLaunchTimeout
+  // (600000ms) yang jadi budget SISI SERVER Appium untuk build+launch WDA di simulator baru.
+  // Diverifikasi lewat log CI (PR #10, job 103687955966): request POST /session gagal dengan
+  // "UND_ERR_HEADERS_TIMEOUT" - klien menyerah duluan sebelum Appium sendiri sempat selesai
+  // (bukan simulator gagal boot, beda dari kegagalan run sebelumnya). Disamakan dengan
+  // wdaLaunchTimeout supaya klien menunggu setidaknya selama server memang dikonfigurasi menunggu.
+  // connectionRetryCount diturunkan ke 1 (dari default 3 di shared config) supaya kegagalan
+  // genuinely tidak jelas tidak berujung menunggu sampai 3x600s=30 menit - Android tidak terdampak
+  // karena override ini hanya berlaku di config ini.
+  connectionRetryTimeout: 600000,
+  connectionRetryCount: 1,
+
   capabilities: [
     {
       platformName: 'iOS',
@@ -38,6 +51,16 @@ export const config: WebdriverIO.Config = {
       // Build WDA butuh waktu lama pada run pertama di mesin/simulator baru (kompilasi Xcode).
       'appium:wdaLaunchTimeout': 600000,
       'appium:wdaConnectionTimeout': 600000,
+
+      // Default XCUITest driver cuma 120s - tidak cukup untuk simulator yang benar-benar baru
+      // pertama kali di-boot di runner CI (macOS runner GitHub Actions selalu mulai dari simulator
+      // yang belum pernah menyala sama sekali, beda dari mesin lokal yang simulatornya sudah pernah
+      // boot sebelumnya). Simulator baru menjalankan proses "Data Migration" satu kali (MCProfile
+      // migrator, CoreLocationMigrator, dst) yang terbukti bisa melewati 120s - diverifikasi lewat
+      // log run CI (PR #10, job 103686062705): "The simulator ... has failed to finish booting after
+      // 120s" persis di tengah proses Data Migration tersebut, gagal walau simulator sebenarnya masih
+      // dalam proses boot normal (bukan hang).
+      'appium:simulatorStartupTimeout': 300000,
 
       // WAJIB. Pengisian form di iOS dilakukan sebagai input keyboard FISIK, bukan lewat keyboard
       // software - karena keyboard software menutupi tombol submit yang dipatok di bawah layar dan

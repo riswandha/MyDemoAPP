@@ -129,6 +129,7 @@ const iosCapabilities: WebdriverIO.Capabilities = {
   'appium:newCommandTimeout': 240,
   'appium:wdaLaunchTimeout': 600000,
   'appium:wdaConnectionTimeout': 600000,
+  'appium:simulatorStartupTimeout': 300000,
   'appium:connectHardwareKeyboard': true,
 };
 
@@ -138,8 +139,10 @@ export async function createRuntime(collection: string): Promise<ReportRuntime> 
     hostname: process.env.APPIUM_HOST || '127.0.0.1',
     port: Number(process.env.APPIUM_PORT) || 4723,
     path: '/',
-    connectionRetryTimeout: 120000,
-    connectionRetryCount: 3,
+    // iOS butuh timeout klien lebih panjang - lihat catatan lengkap connectionRetryTimeout di
+    // config/wdio.ios.conf.ts (WDA build+launch di simulator baru bisa lebih lama dari 120s bawaan).
+    connectionRetryTimeout: reportPlatform === 'ios' ? 600000 : 120000,
+    connectionRetryCount: reportPlatform === 'ios' ? 1 : 3,
     logLevel: 'warn',
     waitforTimeout: 25000,
     capabilities: reportPlatform === 'ios' ? iosCapabilities : androidCapabilities,
