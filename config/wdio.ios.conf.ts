@@ -39,6 +39,16 @@ export const config: WebdriverIO.Config = {
       'appium:wdaLaunchTimeout': 600000,
       'appium:wdaConnectionTimeout': 600000,
 
+      // Default XCUITest driver cuma 120s - tidak cukup untuk simulator yang benar-benar baru
+      // pertama kali di-boot di runner CI (macOS runner GitHub Actions selalu mulai dari simulator
+      // yang belum pernah menyala sama sekali, beda dari mesin lokal yang simulatornya sudah pernah
+      // boot sebelumnya). Simulator baru menjalankan proses "Data Migration" satu kali (MCProfile
+      // migrator, CoreLocationMigrator, dst) yang terbukti bisa melewati 120s - diverifikasi lewat
+      // log run CI (PR #10, job 103686062705): "The simulator ... has failed to finish booting after
+      // 120s" persis di tengah proses Data Migration tersebut, gagal walau simulator sebenarnya masih
+      // dalam proses boot normal (bukan hang).
+      'appium:simulatorStartupTimeout': 300000,
+
       // WAJIB. Pengisian form di iOS dilakukan sebagai input keyboard FISIK, bukan lewat keyboard
       // software - karena keyboard software menutupi tombol submit yang dipatok di bawah layar dan
       // app ini tidak bisa dipaksa menutupnya dengan cara apa pun dari sisi Appium (daftar lengkap

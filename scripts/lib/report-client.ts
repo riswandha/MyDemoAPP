@@ -129,6 +129,7 @@ const iosCapabilities: WebdriverIO.Capabilities = {
   'appium:newCommandTimeout': 240,
   'appium:wdaLaunchTimeout': 600000,
   'appium:wdaConnectionTimeout': 600000,
+  'appium:simulatorStartupTimeout': 300000,
   'appium:connectHardwareKeyboard': true,
 };
 
