@@ -1,0 +1,338 @@
+name: iOS Tests
+
+# Strategi eksekusi SAMA seperti android-tests.yml (sesuai aturan CLAUDE.md: device farm mahal &
+# lambat, jangan full regression tiap commit) - bedanya runner macOS jauh lebih mahal per menit
+# daripada Linux, jadi disiplin "smoke saja di PR" ini lebih penting lagi di sini:
+#   - Pull request       -> typecheck + suite `smoke` di satu simulator
+#   - Push ke main       -> seluruh spec di satu simulator
+#   - Manual             -> pilih suite sendiri
+#
+# TIDAK ADA matrix versi iOS (beda dari Android yang matrix API level 30/33/34/36): runner macOS
+# GitHub Actions hanya menyediakan SATU versi Xcode/iOS simulator siap pakai per image tanpa
+# tambahan setup berat (download Xcode versi lain bisa >10 menit sekali unduh), jadi job ini
+# mendeteksi RUNTIME iOS TERBARU yang tersedia di image saat itu (lihat job `test`, step "Deteksi
+# simulator iOS tersedia") alih-alih mematok versi tertentu seperti `IOS_PLATFORM_VERSION=26.5` di
+# .env lokal - supaya CI tidak rusak setiap kali GitHub memperbarui image Xcode-nya.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Mingguan, tiap Sabtu 02:00 WIB - satu jam setelah jadwal collection report Android (01:00 WIB,
+    # lihat android-tests.yml) supaya dua job macOS/Linux yang sama-sama berat tidak start persis
+    # bersamaan (bukan soal konflik teknis - keduanya independen - cuma menghindari lonjakan runner
+    # sekaligus). Sabtu 02:00 WIB = Jumat 19:00 UTC -> day-of-week 5. Cron GitHub Actions memakai UTC.
+    - cron: '0 19 * * 5'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Suite yang dijalankan ("all" = seluruh spec)'
+        required: false
+        default: 'smoke'
+        type: choice
+        options: ['smoke', 'all', 'login', 'catalog', 'cart', 'checkout', 'menu']
+      collection_report:
+        description: 'Jalankan juga collection report iOS (HTML + PDF). Lama.'
+        required: false
+        default: false
+        type: boolean
+
+# Push beruntun ke ref yang sama membatalkan run lama - hemat runner macOS yang mahal. Run manual
+# dikecualikan (disisipkan run_id) supaya tidak saling membatalkan, sama seperti android-tests.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'shared' }}
+  cancel-in-progress: true
+
+jobs:
+  # Job cepat tanpa simulator: dijalankan di sini juga (bukan cuma mengandalkan job typecheck di
+  # android-tests.yml) supaya workflow ini independen dan tetap memberi gate walau
+  # android-tests.yml diubah/dihapus terpisah.
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm install` bukan `npm ci` - `appium-xcuitest-driver` membawa `sharp` (optionalDependency
+      # transitif lewat @appium/support) di versi berbeda dari copy yang dibawa `appium`, dan `npm ci`
+      # gagal dengan "Missing: @img/sharp-<platform> from lock file" secara tidak konsisten untuk
+      # SEMUA job di kedua workflow (Android & iOS) - lihat catatan lengkap di job `typecheck`
+      # android-tests.yml (diverifikasi ini bug npm dalam menulis lockfile, bukan lockfile yang rusak).
+      - run: npm install
+
+      - run: npm run typecheck
+
+  # Menentukan suite berdasarkan event pemicu, sejajar dengan job `prepare` di android-tests.yml -
+  # supaya job test di bawah tetap satu definisi untuk PR/push/manual.
+  prepare:
+    name: Prepare suite
+    runs-on: ubuntu-latest
+    outputs:
+      suite: ${{ steps.plan.outputs.suite }}
+      suite-args: ${{ steps.plan.outputs.suite-args }}
+    steps:
+      - id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${{ github.event_name }}" in
+            pull_request)
+              suite="smoke"
+              ;;
+            push)
+              suite=""
+              ;;
+            workflow_dispatch)
+              # "all" adalah sentinel untuk "tanpa --suite" - choice input tidak menerima opsi string kosong.
+              suite="${{ inputs.suite }}"
+              if [ "$suite" = "all" ]; then suite=""; fi
+              ;;
+            *)
+              suite="smoke"
+              ;;
+          esac
+
+          if [ -n "$suite" ]; then suite_args="--suite $suite"; else suite_args=""; fi
+
+          {
+            echo "suite=$suite"
+            echo "suite-args=$suite_args"
+          } >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test (iOS Simulator)
+    needs: [typecheck, prepare]
+    runs-on: macos-latest
+    # WDA (WebDriverAgent) build pertama kali di runner baru butuh waktu lama (kompilasi Xcode dari
+    # nol, tidak ada cache) - lihat appium:wdaLaunchTimeout/wdaConnectionTimeout 600000ms di
+    # config/wdio.ios.conf.ts yang sudah mengantisipasi ini. 40 menit memberi ruang lega di atas itu
+    # tanpa menyandera runner selamanya kalau ada yang benar-benar menggantung.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm install` bukan `npm ci` - lihat catatan lengkap di job `typecheck` (atas) atau job
+      # `typecheck` android-tests.yml.
+      - run: npm install
+
+      # Runner CI selalu bersih: app belum terpasang di simulator manapun, jadi APP_PATH WAJIB diisi
+      # supaya Appium meng-install .app-nya (beda dari run lokal yang boleh mengosongkan APP_PATH bila
+      # app sudah terpasang manual). Dipakai release "Simulator" (BUKAN .ipa - itu untuk device fisik)
+      # dari repo resmi Sauce Labs, sejajar dengan APK Android yang juga diambil dari GitHub Release
+      # saat runtime (tidak pernah di-commit).
+      - name: Download app My Demo App (Simulator build)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p apps
+          gh release download --repo saucelabs/my-demo-app-ios \
+            --pattern 'SauceLabs-Demo-App.Simulator.zip' --dir apps --clobber
+          unzip -q -o apps/SauceLabs-Demo-App.Simulator.zip -d apps/ios-sim
+          # Isi zip berbentuk Payload/<Nama App>.app/ (format bawaan Xcode export) - dicari lewat
+          # `find` alih-alih path tetap, supaya tidak rapuh kalau nama .app-nya berubah di rilis
+          # berikutnya.
+          APP_BUNDLE="$(find apps/ios-sim -maxdepth 3 -iname '*.app' -type d | head -1)"
+          if [ -z "$APP_BUNDLE" ]; then
+            echo "Tidak ketemu .app di dalam zip - struktur rilis mungkin berubah." >&2
+            exit 1
+          fi
+          echo "APP_PATH=$APP_BUNDLE" >> "$GITHUB_ENV"
+          echo ".app yang dipakai: $APP_BUNDLE"
+
+      # Lihat catatan panjang di README.md#status-ios / config/wdio.ios.conf.ts: driver dipatok seri
+      # 9.x (XCUITest 12.x butuh Appium 3, project ini masih Appium 2), versi dikunci dari
+      # package-lock.json - sejajar dengan pola Install driver Appium di android-tests.yml.
+      - name: Install driver Appium (XCUITest)
+        env:
+          APPIUM_HOME: ${{ github.workspace }}/.appium
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./node_modules/appium-xcuitest-driver/package.json').version")"
+          npx appium driver install --source=npm "appium-xcuitest-driver@$VERSION"
+          npx appium driver list --installed
+
+      # Runner macOS GitHub Actions tidak menjamin versi Xcode/iOS simulator tertentu selalu tersedia
+      # (beda image, beda runtime bawaan) - jadi TIDAK mematok IOS_DEVICE_NAME/IOS_PLATFORM_VERSION
+      # seperti default lokal ('iPhone 17 Pro'/'26.5' di utils/env.ts, yang khusus untuk simulator
+      # mesin dev). Sebagai gantinya, dideteksi dari device yang BENAR-BENAR ada di image saat ini:
+      # ambil runtime iOS TERBARU yang tersedia, lalu device "iPhone" pertama yang terdaftar di
+      # runtime itu. Pola ini yang membuat job tidak rusak setiap kali GitHub memperbarui image Xcode.
+      - name: Deteksi simulator iOS tersedia
+        run: |
+          set -euo pipefail
+          DEVICE_JSON="$(xcrun simctl list devices available -j)"
+          # Diurutkan NUMERIK (bukan string sort biasa) berdasarkan angka major/minor di nama key-nya
+          # (mis. "...iOS-17-5" -> [17,5]) - string sort polos bisa salah urut kalau ada campuran versi
+          # satu digit & dua digit (mis. "9" dianggap lebih besar dari "17" secara leksikografis).
+          RUNTIME_KEY="$(echo "$DEVICE_JSON" | jq -r '
+            .devices | keys
+            | map(select(test("iOS-[0-9]+-[0-9]+$")))
+            | map({key: ., v: (capture("iOS-(?<maj>[0-9]+)-(?<min>[0-9]+)$") | [(.maj|tonumber), (.min|tonumber)])})
+            | sort_by(.v)
+            | last.key // empty
+          ')"
+          if [ -z "$RUNTIME_KEY" ] || [ "$RUNTIME_KEY" = "null" ]; then
+            echo "Tidak ketemu runtime iOS apa pun di runner ini." >&2
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          PLATFORM_VERSION="$(echo "$RUNTIME_KEY" | sed -E 's/.*iOS-([0-9]+)-([0-9]+)$/\1.\2/')"
+          DEVICE_NAME="$(echo "$DEVICE_JSON" | jq -r --arg key "$RUNTIME_KEY" '.devices[$key] | map(select(.name | test("iPhone"))) | .[0].name')"
+          if [ -z "$DEVICE_NAME" ] || [ "$DEVICE_NAME" = "null" ]; then
+            echo "Tidak ketemu simulator iPhone apa pun untuk runtime $RUNTIME_KEY." >&2
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "IOS_PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
+          echo "IOS_DEVICE_NAME=$DEVICE_NAME" >> "$GITHUB_ENV"
+          echo "Simulator dipakai: $DEVICE_NAME / iOS $PLATFORM_VERSION"
+
+      # WAJIB sebelum run - lihat alasan lengkapnya di README.md#status-ios: capability
+      # appium:connectHardwareKeyboard (dipakai pengetikan form di iOS) hanya diterapkan bila Appium
+      # SENDIRI yang mem-boot simulatornya. Di CI ini otomatis terpenuhi (simulator selalu mulai dari
+      # keadaan mati di runner baru), tapi tetap dijalankan eksplisit untuk konsistensi dengan run
+      # lokal dan berjaga-jaga kalau image runner ke depannya mulai membawa simulator yang sudah hidup.
+      - name: Matikan semua simulator (state awal bersih)
+        run: xcrun simctl shutdown all || true
+
+      # APP_PATH, IOS_DEVICE_NAME, IOS_PLATFORM_VERSION sudah otomatis tersedia di step ini lewat
+      # $GITHUB_ENV di step-step sebelumnya - tidak perlu diulang di sini. APPIUM_HOME juga tidak
+      # perlu diulang: config/wdio.shared.conf.ts sudah fallback ke "<cwd>/.appium" bila env var ini
+      # kosong, dan cwd di step ini SAMA dengan github.workspace yang dipakai step "Install driver".
+      - name: Run tests di simulator iOS
+        run: npx wdio run ./config/wdio.ios.conf.ts ${{ needs.prepare.outputs.suite-args }}
+
+      - name: Tulis ringkasan ke job summary
+        if: always()
+        env:
+          SUMMARY_LABEL: iOS${{ needs.prepare.outputs.suite && format(' / suite {0}', needs.prepare.outputs.suite) || '' }}
+        run: npm run ci:summary
+
+      - name: Generate Allure report
+        if: always()
+        run: npm run report:generate
+
+      - name: Upload Allure report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: allure-report-ios
+          path: |
+            reports/allure-report
+            reports/allure-results
+          retention-days: 14
+          if-no-files-found: warn
+
+  # Collection report kustom iOS: screenshot per langkah + tabel Expected/Actual per case ID, HTML &
+  # PDF per fitur - padanan job `collection-report` di android-tests.yml, tapi lewat
+  # scripts/run-ios-report.ts (SATU simulator, bukan orkestrasi multi-device seperti Android) dan
+  # menghasilkan file `-iOS` terpisah dari `-Android` (lihat scripts/build-collection-report.ts -
+  # "2 laporan" per fitur, bukan satu laporan gabungan lintas platform).
+  collection-report:
+    name: Collection report iOS (HTML + PDF)
+    needs: typecheck
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.collection_report)
+    runs-on: macos-latest
+    # Capture SEMUA 5 collection secara berurutan di 1 simulator (tidak ada multi-device paralel
+    # seperti Android) - job `test` API 33 Android sejenis makan ~13 menit; iOS diperkirakan lebih
+    # lama karena WDA build pertama kali + pengetikan lewat hardware keyboard yang lebih lambat dari
+    # UiAutomator2. 60 menit memberi ruang lega tanpa menyandera runner selamanya.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm install` bukan `npm ci` - lihat catatan lengkap di job `typecheck` android-tests.yml.
+      - run: npm install
+
+      # Sama persis dengan step di job `test` - lihat komentar lengkap di sana.
+      - name: Download app My Demo App (Simulator build)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p apps
+          gh release download --repo saucelabs/my-demo-app-ios \
+            --pattern 'SauceLabs-Demo-App.Simulator.zip' --dir apps --clobber
+          unzip -q -o apps/SauceLabs-Demo-App.Simulator.zip -d apps/ios-sim
+          APP_BUNDLE="$(find apps/ios-sim -maxdepth 3 -iname '*.app' -type d | head -1)"
+          if [ -z "$APP_BUNDLE" ]; then
+            echo "Tidak ketemu .app di dalam zip - struktur rilis mungkin berubah." >&2
+            exit 1
+          fi
+          echo "APP_PATH=$APP_BUNDLE" >> "$GITHUB_ENV"
+          echo ".app yang dipakai: $APP_BUNDLE"
+
+      - name: Install driver Appium (XCUITest)
+        env:
+          APPIUM_HOME: ${{ github.workspace }}/.appium
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./node_modules/appium-xcuitest-driver/package.json').version")"
+          npx appium driver install --source=npm "appium-xcuitest-driver@$VERSION"
+          npx appium driver list --installed
+
+      - name: Deteksi simulator iOS tersedia
+        run: |
+          set -euo pipefail
+          DEVICE_JSON="$(xcrun simctl list devices available -j)"
+          RUNTIME_KEY="$(echo "$DEVICE_JSON" | jq -r '
+            .devices | keys
+            | map(select(test("iOS-[0-9]+-[0-9]+$")))
+            | map({key: ., v: (capture("iOS-(?<maj>[0-9]+)-(?<min>[0-9]+)$") | [(.maj|tonumber), (.min|tonumber)])})
+            | sort_by(.v)
+            | last.key // empty
+          ')"
+          if [ -z "$RUNTIME_KEY" ] || [ "$RUNTIME_KEY" = "null" ]; then
+            echo "Tidak ketemu runtime iOS apa pun di runner ini." >&2
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          PLATFORM_VERSION="$(echo "$RUNTIME_KEY" | sed -E 's/.*iOS-([0-9]+)-([0-9]+)$/\1.\2/')"
+          DEVICE_NAME="$(echo "$DEVICE_JSON" | jq -r --arg key "$RUNTIME_KEY" '.devices[$key] | map(select(.name | test("iPhone"))) | .[0].name')"
+          if [ -z "$DEVICE_NAME" ] || [ "$DEVICE_NAME" = "null" ]; then
+            echo "Tidak ketemu simulator iPhone apa pun untuk runtime $RUNTIME_KEY." >&2
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "IOS_PLATFORM_VERSION=$PLATFORM_VERSION" >> "$GITHUB_ENV"
+          echo "IOS_DEVICE_NAME=$DEVICE_NAME" >> "$GITHUB_ENV"
+          echo "Simulator dipakai: $DEVICE_NAME / iOS $PLATFORM_VERSION"
+
+      - name: Matikan semua simulator (state awal bersih)
+        run: xcrun simctl shutdown all || true
+
+      - name: Capture semua collection
+        run: npm run report:capture:ios
+
+      - name: Bangun laporan HTML + PDF
+        run: npm run report:build
+
+      - name: Upload collection report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: collection-report-ios
+          path: |
+            reports/*.html
+            reports/*.pdf
+            reports/screenshots
+          retention-days: 14
+          if-no-files-found: warn

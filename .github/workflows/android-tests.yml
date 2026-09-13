@@ -66,7 +66,20 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      # `npm install`, BUKAN `npm ci` - sengaja, bukan kelalaian. `npm ci` di seluruh job pada kedua
+      # workflow (Android & iOS) GAGAL dengan "Missing: @img/sharp-<platform> from lock file" begitu
+      # `appium-xcuitest-driver` (yang membawa `sharp` sebagai optionalDependency transitif lewat
+      # @appium/support, dengan versi berbeda dari copy yang dibawa `appium`/
+      # `appium-uiautomator2-driver`) masuk ke package.json. Diverifikasi lokal: regenerasi
+      # package-lock.json berkali-kali (termasuk dari nol, termasuk dengan Node/npm versi yang SAMA
+      # PERSIS dengan runner ini) tidak pernah menghasilkan lockfile yang lolos `npm ci` secara
+      # konsisten - platform variant yang "hilang" berbeda-beda tiap kali regenerasi (kadang ppc64,
+      # kadang win32-x64, dst), menunjukkan ini bug pada npm sendiri dalam menulis lockfile untuk
+      # optionalDependencies platform-specific yang muncul di lebih dari satu versi dalam satu
+      # dependency tree, bukan lockfile yang benar-benar rusak. `npm install` tidak melakukan
+      # pengecekan konsistensi seketat itu dan terbukti selalu berhasil dengan package-lock.json yang
+      # sama persis.
+      - run: npm install
 
       - run: npm run typecheck
 
@@ -160,7 +173,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - run: npm ci
+      # `npm install` bukan `npm ci` - lihat catatan lengkap di job `typecheck`.
+      - run: npm install
 
       # Runner CI selalu bersih: app belum terpasang, jadi APP_PATH WAJIB diisi agar Appium
       # meng-install APK (berbeda dari run lokal yang boleh mengosongkan APP_PATH).
@@ -181,8 +195,8 @@ jobs:
       # config/wdio.shared.conf.ts mengarahkan APPIUM_HOME ke .appium/ milik project, tapi folder itu
       # gitignored - di runner ia tidak ada sama sekali, sehingga Appium start tanpa driver apa pun dan
       # pembuatan sesi gagal dengan "Could not find a driver for automationName 'UiAutomator2'".
-      # Versi dibaca dari node_modules (hasil npm ci) supaya CI memakai versi yang sama persis dengan
-      # package-lock.json, bukan versi terbaru yang kebetulan ada di npm.
+      # Versi dibaca dari node_modules (hasil npm install) supaya CI memakai versi yang sama persis
+      # dengan package-lock.json, bukan versi terbaru yang kebetulan ada di npm.
       - name: Install driver Appium (UiAutomator2)
         env:
           APPIUM_HOME: ${{ github.workspace }}/.appium
@@ -310,7 +324,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - run: npm ci
+      # `npm install` bukan `npm ci` - lihat catatan lengkap di job `typecheck`.
+      - run: npm install
 
       - name: Download APK My Demo App
         env:

@@ -12,11 +12,19 @@ import {
   createShippingAddress,
   createPaymentDetails,
   SHIPPING_FEE,
+  platformText,
 } from '../../utils/test-data';
 
 // Ubah teks harga dari app (mis. "$ 29.99") jadi angka supaya bisa dihitung/dibandingkan
 function parsePrice(priceText: string): number {
   return Number(priceText.replace(/[^0-9.]/g, ''));
+}
+
+// Format badge jumlah item di halaman Review Order berbeda per platform - Android "2 Items" (spasi,
+// selalu plural), iOS "2item" (tanpa spasi sama sekali, diverifikasi di device dengan quantity 1 dan
+// 2 - keduanya sama-sama tanpa spasi, bukan salah baca).
+function expectedItemsCountText(quantity: number): string {
+  return platformText({ android: `${quantity} Items`, ios: `${quantity}item` });
 }
 
 // Test suite untuk Fitur Checkout (TS004), mengikuti Test Script Excel: Sub Fitur "Place Order"
@@ -35,8 +43,9 @@ describe('Checkout Feature', () => {
     await CartPage.goShopping();
 
     // 1. Buka produk & catat harga satuan sebagai acuan verifikasi harga di halaman-halaman berikutnya
-    await CatalogPage.openProduct(checkoutProduct.name);
-    expect(await ProductDetailPage.getTitle()).toBe(checkoutProduct.name);
+    const productName = platformText(checkoutProduct.name);
+    await CatalogPage.openProduct(productName);
+    expect(await ProductDetailPage.getTitle()).toBe(productName);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
 
     // 2. Set quantity jadi 2, lalu tambahkan ke cart
@@ -47,7 +56,7 @@ describe('Checkout Feature', () => {
     // 3. Verifikasi harga di halaman Cart terhadap halaman Product Detail:
     //    harga satuan harus sama, dan subtotal harus sama dengan (harga satuan x quantity)
     await ProductDetailPage.openCart();
-    expect(await CartPage.getItemTitle()).toBe(checkoutProduct.name);
+    expect(await CartPage.getItemTitle()).toBe(productName);
     expect(parsePrice(await CartPage.getItemPrice())).toBe(unitPrice);
     expect(await CartPage.getItemQuantity()).toBe(String(checkoutProduct.quantity));
     const cartSubtotal = parsePrice(await CartPage.getTotalPrice());
@@ -65,9 +74,9 @@ describe('Checkout Feature', () => {
     // 6. Checkout Step 3 (Review Order) - verifikasi harga terhadap halaman Cart:
     //    harga satuan & quantity harus tetap sama, sedangkan Total di halaman ini sudah termasuk biaya
     //    pengiriman tetap (SHIPPING_FEE), jadi dibandingkan sebagai subtotal + shipping
-    expect(await CheckoutOverviewPage.getItemTitle()).toBe(checkoutProduct.name);
+    expect(await CheckoutOverviewPage.getItemTitle()).toBe(productName);
     expect(parsePrice(await CheckoutOverviewPage.getItemPrice())).toBe(unitPrice);
-    expect(await CheckoutOverviewPage.getItemsCount()).toBe(`${checkoutProduct.quantity} Items`);
+    expect(await CheckoutOverviewPage.getItemsCount()).toBe(expectedItemsCountText(checkoutProduct.quantity));
     const reviewTotal = parsePrice(await CheckoutOverviewPage.getTotalAmount());
     expect(reviewTotal).toBeCloseTo(cartSubtotal + SHIPPING_FEE, 2);
 
@@ -87,7 +96,7 @@ describe('Checkout Feature', () => {
     await CartPage.clearCart();
     await CartPage.goShopping();
 
-    await CatalogPage.openProduct(checkoutProduct.name);
+    await CatalogPage.openProduct(platformText(checkoutProduct.name));
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await ProductDetailPage.increaseQuantity(checkoutProduct.quantity - 1);
     await ProductDetailPage.addToCart();
@@ -106,7 +115,7 @@ describe('Checkout Feature', () => {
     // Bandingkan ringkasan Review Order terhadap data yang sama dari halaman Cart sebelumnya
     expect(await CheckoutOverviewPage.getItemTitle()).toBe(cartTitle);
     expect(parsePrice(await CheckoutOverviewPage.getItemPrice())).toBe(unitPrice);
-    expect(await CheckoutOverviewPage.getItemsCount()).toBe(`${cartQty} Items`);
+    expect(await CheckoutOverviewPage.getItemsCount()).toBe(expectedItemsCountText(Number(cartQty)));
     const reviewTotal = parsePrice(await CheckoutOverviewPage.getTotalAmount());
     expect(reviewTotal).toBeCloseTo(cartSubtotal + SHIPPING_FEE, 2);
 

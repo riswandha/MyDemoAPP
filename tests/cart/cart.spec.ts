@@ -8,6 +8,7 @@ import {
   updateQtyIncreaseData,
   updateQtyDecreaseData,
   repeatedAddToCartData,
+  platformText,
 } from '../../utils/test-data';
 
 // Ubah teks harga dari app (mis. "$ 29.99") jadi angka supaya bisa dihitung/dibandingkan
@@ -31,14 +32,14 @@ describe('Cart Feature', () => {
     await CartPage.clearCart();
     await CartPage.goShopping();
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(platformText(cartProduct));
     await ProductDetailPage.selectColor(cartProductColor);
     await ProductDetailPage.increaseQuantity(addProductData.quantity - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await ProductDetailPage.addToCart();
 
     await ProductDetailPage.openCart();
-    expect(await CartPage.getItemTitle()).toBe(cartProduct);
+    expect(await CartPage.getItemTitle()).toBe(platformText(cartProduct));
     expect(await CartPage.getItemQuantity()).toBe(String(addProductData.quantity));
     expect(parsePrice(await CartPage.getTotalPrice())).toBeCloseTo(unitPrice * addProductData.quantity, 2);
   });
@@ -49,7 +50,7 @@ describe('Cart Feature', () => {
     await CartPage.clearCart();
     await CartPage.goShopping();
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(platformText(cartProduct));
     await ProductDetailPage.addToCart();
     await ProductDetailPage.openCart();
 
@@ -64,7 +65,7 @@ describe('Cart Feature', () => {
     await CartPage.clearCart();
     await CartPage.goShopping();
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(platformText(cartProduct));
     await ProductDetailPage.increaseQuantity(updateQtyIncreaseData.initialQty - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await ProductDetailPage.addToCart();
@@ -84,7 +85,7 @@ describe('Cart Feature', () => {
     await CartPage.clearCart();
     await CartPage.goShopping();
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(platformText(cartProduct));
     await ProductDetailPage.increaseQuantity(updateQtyDecreaseData.initialQty - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
     await ProductDetailPage.addToCart();
@@ -104,7 +105,7 @@ describe('Cart Feature', () => {
     await CartPage.clearCart();
     await CartPage.goShopping();
 
-    await CatalogPage.openProduct(cartProduct);
+    await CatalogPage.openProduct(platformText(cartProduct));
     await ProductDetailPage.increaseQuantity(repeatedAddToCartData.quantityPerAdd - 1);
     const unitPrice = parsePrice(await ProductDetailPage.getPrice());
 

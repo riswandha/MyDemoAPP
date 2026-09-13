@@ -29,6 +29,9 @@ interface DeviceMeta {
   model: string;
   platformVersion: string;
   appVersion: string;
+  // Label tampilan platform ("Android"/"iOS") - dari sinilah kolom OS & teks cover diambil, BUKAN
+  // hardcode "Android" seperti sebelum laporan ini mendukung iOS.
+  platform: 'Android' | 'iOS';
 }
 
 interface DeviceDataset {
@@ -206,7 +209,7 @@ function buildHtml(collection: string, datasets: DeviceDataset[], meta: Collecti
       return `<tr>
         <td><strong>${esc(ds.device.label)}</strong></td>
         <td>${esc(ds.device.model || ds.device.udid)}</td>
-        <td>Android ${esc(ds.device.platformVersion || '-')}</td>
+        <td>${esc(ds.device.platform)} ${esc(ds.device.platformVersion || '-')}</td>
         <td>v${esc(ds.device.appVersion || '-')}</td>
         <td>${ds.cases.length}</td>
         <td>${t.totalVer}</td>
@@ -273,7 +276,7 @@ function buildHtml(collection: string, datasets: DeviceDataset[], meta: Collecti
       : '';
 
   const deviceListLine = datasets
-    .map((d) => `${esc(d.device.label)} (${esc(d.device.model || d.device.udid)}, Android ${esc(d.device.platformVersion)}, app v${esc(d.device.appVersion)})`)
+    .map((d) => `${esc(d.device.label)} (${esc(d.device.model || d.device.udid)}, ${esc(d.device.platform)} ${esc(d.device.platformVersion)}, app v${esc(d.device.appVersion)})`)
     .join(' &nbsp;•&nbsp; ');
 
   return `<!doctype html>
@@ -331,7 +334,7 @@ function buildHtml(collection: string, datasets: DeviceDataset[], meta: Collecti
 
   <div class="cover">
     <h1>Laporan Hasil Pengujian Otomatis</h1>
-    <div class="subtitle">Aplikasi: My Demo App (Sauce Labs) - Android</div>
+    <div class="subtitle">Aplikasi: My Demo App (Sauce Labs) - ${esc(datasets[0].device.platform)}</div>
     <div class="subtitle">Test Case Collection: ${esc(meta.displayName)}</div>
     <div class="subtitle">${esc(meta.subtitle)}</div>
     <div class="device-line"><strong>Dijalankan di ${datasets.length} device:</strong><br>${deviceListLine}</div>
@@ -404,11 +407,19 @@ function renderPdf(htmlFile: string, pdfFile: string): void {
   ]);
 }
 
-function loadDeviceDatasets(dataDir: string, collection: string): DeviceDataset[] {
+// Platform yang didukung untuk laporan - masing-masing dibangun sebagai file HTML/PDF TERPISAH (dua
+// laporan berbeda, bukan satu laporan gabungan lintas platform), sesuai permintaan proyek ini.
+const PLATFORMS = ['android', 'ios'] as const;
+type ReportPlatform = (typeof PLATFORMS)[number];
+
+function loadDeviceDatasets(dataDir: string, collection: string, platform: ReportPlatform): DeviceDataset[] {
   if (!fs.existsSync(dataDir)) return [];
-  // Hanya file per-device: <collection>.<device-slug>.json (dua titik). Sengaja mengecualikan file
-  // lama format single-device <collection>.json (tanpa slug/metadata device).
-  const pattern = new RegExp(`^${collection}\\.[a-z0-9-]+\\.json$`);
+  // Hanya file per-platform+device: <collection>.<platform>.<device-slug>.json (dipisah PLATFORM
+  // secara eksplisit di nama file - lihat report-client.ts writeReportData()). Sengaja mengecualikan
+  // file format lama <collection>.<device-slug>.json (dua titik, tanpa segmen platform) dari sebelum
+  // laporan ini mendukung iOS - reports/ seluruhnya gitignored & selalu digenerate ulang, jadi tidak
+  // ada file lama yang perlu tetap didukung.
+  const pattern = new RegExp(`^${collection}\\.${platform}\\.[a-z0-9-]+\\.json$`);
   const files = fs.readdirSync(dataDir).filter((f) => pattern.test(f));
   const datasets = files
     .map((f) => JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf-8')) as DeviceDataset)
@@ -424,27 +435,41 @@ function main() {
   const requested = process.argv.slice(2);
   const collections = requested.length > 0 ? requested : Object.keys(COLLECTION_META);
 
-  for (const collection of collections) {
-    const datasets = loadDeviceDatasets(dataDir, collection);
-    if (datasets.length === 0) {
-      console.warn(`Skip "${collection}": tidak ada data device (jalankan scripts/run-multidevice-reports.ts dulu).`);
-      continue;
-    }
-    const meta = COLLECTION_META[collection];
-    if (!meta) {
-      console.warn(`Skip "${collection}": tidak ada metadata tampilan terdaftar.`);
-      continue;
-    }
-    const html = buildHtml(collection, datasets, meta);
+  let generated = 0;
+  for (const platform of PLATFORMS) {
+    for (const collection of collections) {
+      const datasets = loadDeviceDatasets(dataDir, collection, platform);
+      if (datasets.length === 0) {
+        // Wajar untuk terlewat kalau memang belum pernah di-capture untuk platform ini (mis. baru
+        // jalankan report:capture Android saja) - bukan error, jadi cukup di-skip diam-diam. Kalau
+        // BENAR-BENAR tidak ada satupun yang ke-generate, itu baru diberi tahu di akhir (lihat bawah).
+        continue;
+      }
+      const meta = COLLECTION_META[collection];
+      if (!meta) {
+        console.warn(`Skip "${collection}" (${platform}): tidak ada metadata tampilan terdaftar.`);
+        continue;
+      }
+      const html = buildHtml(collection, datasets, meta);
 
-    const titleCase = collection.charAt(0).toUpperCase() + collection.slice(1);
-    const htmlFile = path.join(reportDir, `${titleCase}-Report.html`);
-    const pdfFile = path.join(reportDir, `${titleCase}-Report.pdf`);
-    fs.writeFileSync(htmlFile, html);
-    console.log(`HTML report tersimpan di: ${htmlFile} (${datasets.length} device)`);
+      const titleCase = collection.charAt(0).toUpperCase() + collection.slice(1);
+      const platformSuffix = platform === 'ios' ? 'iOS' : 'Android';
+      const htmlFile = path.join(reportDir, `${titleCase}-Report-${platformSuffix}.html`);
+      const pdfFile = path.join(reportDir, `${titleCase}-Report-${platformSuffix}.pdf`);
+      fs.writeFileSync(htmlFile, html);
+      console.log(`HTML report tersimpan di: ${htmlFile} (${datasets.length} device)`);
 
-    renderPdf(htmlFile, pdfFile);
-    console.log(`PDF report tersimpan di: ${pdfFile}`);
+      renderPdf(htmlFile, pdfFile);
+      console.log(`PDF report tersimpan di: ${pdfFile}`);
+      generated++;
+    }
+  }
+
+  if (generated === 0) {
+    console.warn(
+      'Tidak ada laporan yang di-generate sama sekali - belum ada data di reports/data/. ' +
+        'Jalankan "npm run report:capture" (Android) dan/atau "npm run report:capture:ios" (iOS) dulu.'
+    );
   }
 }
 

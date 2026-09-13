@@ -33,6 +33,40 @@ export const invalidUser = {
   password: 'wrongpass',
 };
 
+// ----- Pesan error login -----
+//
+// Beberapa nilai di sini BERBEDA antar platform karena app-nya memang menampilkan teks yang berbeda,
+// bukan karena locator-nya berbeda. Perbedaan jenis ini tidak tertolong oleh platformLocator(), jadi
+// dipilih lewat platformText() di bawah - satu-satunya titik percabangan platform untuk TEST DATA,
+// sejajar dengan tiga titik lain yang sudah ada (locator, gesture, identitas app).
+export interface PlatformText {
+  android: string;
+  ios: string;
+}
+
+export function platformText(text: PlatformText): string {
+  return driver.isIOS ? text.ios : text.android;
+}
+
+export const loginErrors = {
+  // Sama persis di kedua platform (terverifikasi di device).
+  usernameRequired: 'Username is required',
+
+  // BERBEDA. Excel menulis "Password is required"; itu yang dipakai app iOS, sedangkan app Android
+  // menampilkan "Enter Password". Acuan tiap platform = teks app-nya masing-masing supaya test benar
+  // terhadap perilaku nyata, dan selisih penulisan di Android dicatat sebagai temuan.
+  passwordRequired: {
+    android: 'Enter Password',
+    ios: 'Password is required',
+  } satisfies PlatformText,
+
+  // Hanya ada di Android. App iOS tidak punya akun locked out sama sekali - diverifikasi dua arah:
+  // keempat akun pada daftar username tersimpan semuanya berhasil login, dan tidak ada satu pun string
+  // bertema "locked" di dalam binary app iOS. Skenarionya karena itu ditandai @android-only.
+  // Teks di bawah tanpa koma, mengikuti teks app yang sebenarnya (Excel menulisnya dengan koma).
+  lockedOut: 'Sorry this user has been locked out.',
+};
+
 // ===================== TS002 - Katalog =====================
 
 // Nama produk memakai nama lengkap persis seperti yang tampil di app (hasil inspeksi di device) -
@@ -46,21 +80,41 @@ export const baseProducts = [
   'Test.allTheThings() T-Shirt',
 ];
 
-// Produk untuk skenario Detail Produk (TC002) & Review Produk (TC004)
-export const detailProduct = 'Sauce Labs Backpack';
+// Produk untuk skenario Detail Produk (TC002) & Review Produk (TC004).
+// BERBEDA per platform - bukan beda locator, tapi beda ISI KATALOG-nya. Diverifikasi lewat scroll
+// penuh katalog di device: app Android punya entri "Sauce Labs Backpack" polos (tanpa varian warna)
+// sebagai salah satu dari 22 kartu, sedangkan app iOS TIDAK PERNAH punya entri polos untuk produk yang
+// punya varian warna - satu-satunya bentuk yang ada di 25 kartu katalog iOS adalah yang sudah disuffix
+// warna (mis. "Sauce Labs Backpack - Black", "- Green", dst). Dipilih lewat platformText() supaya
+// openProduct() di TC002 benar-benar menemukan elemen yang ada di device, bukan mencari nama yang
+// tidak pernah dirender.
+export const detailProduct = {
+  android: 'Sauce Labs Backpack',
+  ios: 'Sauce Labs Backpack - Black',
+} satisfies PlatformText;
 export const reviewRatingStars = 4 as const;
 
 // ===================== TS003 - Cart =====================
 
-// CATATAN PENTING: Excel memakai produk "Onesie" (TC001) dan "Sauce Labs Bike Light" (TC005), tapi
-// hasil investigasi langsung di device menemukan bug crash asli di app: HANYA "Sauce Labs Backpack"
-// beserta varian warnanya (index 0-5 di grid katalog) yang bisa dibuka tanpa crash. Produk apapun
-// setelah itu (Bike Light, Bolt T-Shirt, Fleece Jacket, Onesie, Test.allTheThings(), dst) membuat app
-// crash saat diklik (java.lang.ArrayIndexOutOfBoundsException / NullPointerException di
-// ProductCatalogFragment.java:156, diverifikasi lewat adb logcat, konsisten di berbagai skenario).
-// Karena ini bug di app (bukan di test), seluruh skenario Cart memakai "Sauce Labs Backpack" sebagai
-// pengganti.
-export const cartProduct = 'Sauce Labs Backpack';
+// CATATAN PENTING (Android): Excel memakai produk "Onesie" (TC001) dan "Sauce Labs Bike Light"
+// (TC005), tapi hasil investigasi langsung di device menemukan bug crash asli di app ANDROID: HANYA
+// "Sauce Labs Backpack" beserta varian warnanya (index 0-5 di grid katalog) yang bisa dibuka tanpa
+// crash. Produk apapun setelah itu (Bike Light, Bolt T-Shirt, Fleece Jacket, Onesie,
+// Test.allTheThings(), dst) membuat app crash saat diklik (java.lang.ArrayIndexOutOfBoundsException /
+// NullPointerException di ProductCatalogFragment.java:156, diverifikasi lewat adb logcat, konsisten di
+// berbagai skenario). Karena ini bug di app (bukan di test), seluruh skenario Cart memakai
+// "Sauce Labs Backpack" sebagai pengganti.
+//
+// BERBEDA per platform - sama seperti `detailProduct` di atas: app iOS tidak punya entri katalog
+// "Sauce Labs Backpack" polos, cuma varian warna. Dipilih lewat platformText().
+export const cartProduct = {
+  android: 'Sauce Labs Backpack',
+  ios: 'Sauce Labs Backpack - Black',
+} satisfies PlatformText;
+// Warna yang dipilih lewat swatch di halaman Detail Produk sebelum Add to Cart (TC001) - SELALU wajib
+// dipilih eksplisit di iOS: diverifikasi warna default produk yang masuk cart di iOS selalu "Green"
+// kalau swatch tidak di-tap sama sekali, terlepas dari nama/warna kartu katalog yang dibuka. Lihat
+// catatan lengkap di locators/cart.locators.ts.
 export const cartProductColor = 'Black';
 
 export const addProductData = {
@@ -84,8 +138,13 @@ export const repeatedAddToCartData = {
 
 // ===================== TS004 - Checkout =====================
 
+// `name` berbeda per platform - alasan sama seperti `detailProduct`/`cartProduct` di atas: app iOS
+// tidak punya entri katalog "Sauce Labs Backpack" polos, cuma varian warna.
 export const checkoutProduct = {
-  name: 'Sauce Labs Backpack',
+  name: {
+    android: 'Sauce Labs Backpack',
+    ios: 'Sauce Labs Backpack - Black',
+  } satisfies PlatformText,
   quantity: 2,
 };
 
@@ -138,9 +197,22 @@ export const SHIPPING_FEE = 5.99;
 export const validWebviewUrl = 'https://www.saucelabs.com';
 
 // Excel memakai "www.saucelabs.com" (tanpa https://) sebagai contoh input tidak valid, tapi hasil
-// investigasi di device menunjukkan app benar-benar mencoba me-load string apapun yang menyerupai
-// domain (termasuk tanpa skema) alih-alih validasi client-side - baru menampilkan error "Please
-// provide a correct https url." kalau input sama sekali bukan bentuk URL (tanpa titik/domain). Data
-// disesuaikan dengan perilaku app yang sebenarnya supaya pesan error benar-benar teruji.
+// investigasi di device menunjukkan app Android benar-benar mencoba me-load string apapun yang
+// menyerupai domain (termasuk tanpa skema) alih-alih validasi client-side - baru menampilkan error
+// "Please provide a correct https url." kalau input sama sekali bukan bentuk URL (tanpa titik/domain).
+// Data disesuaikan dengan perilaku app yang sebenarnya supaya pesan error benar-benar teruji.
 export const invalidWebviewUrl = 'saucelabs';
-export const invalidWebviewUrlError = 'Please provide a correct https url.';
+
+// BERBEDA total per platform - bukan cuma beda teks, beda PERILAKU. Android memvalidasi input ini
+// secara sinkron dan menampilkan pesan error di atas. iOS TIDAK PERNAH melakukan validasi client-side
+// apa pun untuk input ini - form langsung ditinggalkan dan layar macet permanen di overlay
+// "Loading ..." (WKWebView gagal me-resolve "saucelabs" sebagai domain, tapi app tidak menangani
+// kegagalan itu). Diverifikasi lewat page source dump: byte-nya identik walau ditunggu berulang kali
+// selama 10 detik, dan kontras jelas dengan url VALID yang sukses memuat halaman sungguhan (~210KB)
+// dalam <2 detik. Karena itu nilai "error" yang diharapkan di iOS adalah bukti navigasi macet
+// (teks "Loading ..." yang seharusnya sudah hilang tapi tetap ada), bukan pesan validasi seperti
+// Android - lihat MenuLocators.webviewUrlError di locators/menu.locators.ts.
+export const invalidWebviewUrlError = {
+  android: 'Please provide a correct https url.',
+  ios: 'Loading ...',
+};

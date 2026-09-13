@@ -17,9 +17,16 @@
     "appium": "appium",
     "ci:summary": "ts-node scripts/ci-step-summary.ts",
     "report:capture": "ts-node scripts/run-multidevice-reports.ts",
+    "report:capture:ios": "ts-node scripts/run-ios-report.ts",
     "report:build": "ts-node scripts/build-collection-report.ts",
     "report:generate": "allure generate reports/allure-results --clean -o reports/allure-report",
-    "report:open": "allure open reports/allure-report"
+    "report:open": "allure open reports/allure-report",
+    "test:ios:login": "wdio run ./config/wdio.ios.conf.ts --suite login",
+    "test:ios:catalog": "wdio run ./config/wdio.ios.conf.ts --suite catalog",
+    "test:ios:cart": "wdio run ./config/wdio.ios.conf.ts --suite cart",
+    "test:ios:checkout": "wdio run ./config/wdio.ios.conf.ts --suite checkout",
+    "test:ios:menu": "wdio run ./config/wdio.ios.conf.ts --suite menu",
+    "test:ios:smoke": "wdio run ./config/wdio.ios.conf.ts --suite smoke"
   },
   "keywords": [
     "appium",
@@ -40,6 +47,7 @@
     "allure-commandline": "^2.30.0",
     "appium": "^2.11.0",
     "appium-uiautomator2-driver": "^3.7.0",
+    "appium-xcuitest-driver": "^9.10.5",
     "dotenv": "^16.4.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
