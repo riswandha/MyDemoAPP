@@ -97,6 +97,12 @@ class MenuPage extends BasePage {
   // Buat coretan sederhana di canvas dengan gesture swipe, supaya ada "gambar" sebelum di-clear
   async drawStroke(): Promise<void> {
     const canvas = await $(this.platformLocator(MenuLocators.drawingCanvas));
+    // Wajib wait eksplisit sebelum getLocation()/getSize(): transisi push ke layar Drawing di iOS
+    // belum tentu selesai persis saat openDrawing() return, jadi canvas bisa belum ada di
+    // accessibility tree sesaat setelahnya (root cause gagal "element wasn't found" yang muncul di
+    // CI - lihat run 34741739997). Sama seperti getText()/click() lain di BasePage, bukan cuma
+    // kebiasaan.
+    await canvas.waitForDisplayed({ timeout: 10000 });
     const location = await canvas.getLocation();
     const size = await canvas.getSize();
     const startX = location.x + Math.floor(size.width * 0.3);
